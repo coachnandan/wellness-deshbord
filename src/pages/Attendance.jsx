@@ -197,6 +197,7 @@ export default function Attendance() {
                 <th className="px-10 py-6 hidden md:table-cell">Professional Focus</th>
                 <th className="px-10 py-6 hidden lg:table-cell">Membership</th>
                 <th className="px-10 py-6">Session Status</th>
+                <th className="px-10 py-6">Marked By</th>
                 <th className="px-10 py-6 text-center">Attendance Marking</th>
               </tr>
             </thead>
@@ -211,11 +212,11 @@ export default function Attendance() {
                     <td className="px-10 py-8">
                       <div className="flex items-center">
                         <div className="w-12 h-12 rounded-2xl bg-offwhite border border-beige flex items-center justify-center text-forest font-black text-sm mr-4 shadow-sm group-hover:bg-forest group-hover:text-white transition-all duration-500">
-                           {client.name.charAt(0)}
+                           {client?.name?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p className="font-extrabold text-forest text-base leading-tight">{client.name}</p>
-                          <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{client.contact}</p>
+                          <p className="font-extrabold text-forest text-base leading-tight">{client?.name || 'Unknown'}</p>
+                          <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{client?.contact || 'No Contact'}</p>
                         </div>
                       </div>
                     </td>
@@ -242,6 +243,9 @@ export default function Attendance() {
                           </div>
                         ) : status}
                       </span>
+                    </td>
+                    <td className="px-10 py-8">
+                      <p className="text-xs font-bold text-forest">{record?.markedBy || '-'}</p>
                     </td>
                     <td className="px-10 py-8">
                       <div className="flex justify-center items-center space-x-3">

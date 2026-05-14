@@ -110,7 +110,7 @@ const Header = ({ toggleSidebar }) => {
           <Menu size={22} />
         </button>
         <div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-forest tracking-tight leading-tight">Namaste, {user?.name.split(' ')[0] || 'Aditi'}</h2>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-forest tracking-tight leading-tight">Namaste, {user?.name?.split(' ')[0] || 'Aditi'}</h2>
           <p className="text-xs sm:text-sm text-muted font-bold tracking-tight">Today is a beautiful day for wellness.</p>
         </div>
       </div>

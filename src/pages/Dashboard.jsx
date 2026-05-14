@@ -156,11 +156,11 @@ export default function Dashboard() {
               <div key={customer.id} className="px-8 py-6 flex items-center justify-between hover:bg-offwhite transition-colors group">
                 <div className="flex items-center">
                   <div className="w-12 h-12 rounded-2xl bg-offwhite border border-beige text-forest flex items-center justify-center font-black text-base mr-4 transition-all group-hover:scale-110 group-hover:bg-forest group-hover:text-white group-hover:border-forest shadow-sm">
-                    {customer.name.charAt(0)}
+                    {customer?.name?.charAt(0) || '?'}
                   </div>
                   <div>
-                    <p className="text-base font-extrabold text-forest">{customer.name}</p>
-                    <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em] mt-1">{customer.address.split(',')[0]}</p>
+                    <p className="text-base font-extrabold text-forest">{customer?.name || 'Unknown'}</p>
+                    <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em] mt-1">{customer?.address?.split(',')[0] || 'Unknown Location'}</p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end">

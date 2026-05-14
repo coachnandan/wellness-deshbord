@@ -2,21 +2,38 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAppContext } from '../context/AppContext';
+import { supabase } from '../lib/supabaseClient';
 import { toast } from 'react-toastify';
-import { Lock, Mail, Leaf } from 'lucide-react';
+import { Lock, Mail, Leaf, User as UserIcon } from 'lucide-react';
 
 export default function Login() {
   const { register, handleSubmit, formState: { errors } } = useForm();
   const { login } = useAppContext();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
 
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
-      await login(data);
-      toast.success('Welcome back to the Sanctuary');
-      navigate('/');
+      if (isSignUp) {
+        const { data: authData, error } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password,
+          options: {
+            data: {
+              full_name: data.name || 'Anonymous Coach',
+            }
+          }
+        });
+        if (error) throw error;
+        toast.success('Sanctuary account requested. Please verify your email.');
+        setIsSignUp(false);
+      } else {
+        await login(data);
+        toast.success('Welcome back to the Sanctuary');
+        navigate('/');
+      }
     } catch (error) {
       toast.error(error.message || 'Authentication failed. Please check your credentials.');
     } finally {
@@ -44,6 +61,24 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          {isSignUp && (
+            <div className="space-y-3">
+              <label className="block text-[10px] font-black text-[#1F4D3A] uppercase tracking-[0.2em] px-1">Full Legal Name</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                  <UserIcon className="h-5 w-5 text-[#7A9B8E]" />
+                </div>
+                <input
+                  {...register("name", { required: isSignUp ? "Name is required" : false })}
+                  type="text"
+                  className="w-full pl-14 pr-6 py-5 bg-white border border-[#E7E5E4] rounded-2xl text-[#1E1E1E] font-bold focus:ring-4 focus:ring-[#7A9B8E]/10 focus:border-[#1F4D3A] transition-all outline-none placeholder-[#6B7280]/20"
+                  placeholder="Coach Name"
+                />
+              </div>
+              {errors.name && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.name.message}</span>}
+            </div>
+          )}
+
           <div className="space-y-3">
             <label className="block text-[10px] font-black text-[#1F4D3A] uppercase tracking-[0.2em] px-1">Institutional Email</label>
             <div className="relative group">
@@ -53,7 +88,7 @@ export default function Login() {
               <input
                 {...register("email", { required: "Email is required" })}
                 type="email"
-                defaultValue="coach@elevate.in"
+                defaultValue={isSignUp ? "" : "coach@elevate.in"}
                 className="w-full pl-14 pr-6 py-5 bg-white border border-[#E7E5E4] rounded-2xl text-[#1E1E1E] font-bold focus:ring-4 focus:ring-[#7A9B8E]/10 focus:border-[#1F4D3A] transition-all outline-none placeholder-[#6B7280]/20"
                 placeholder="coach@elevate.in"
               />
@@ -70,7 +105,7 @@ export default function Login() {
               <input
                 {...register("password", { required: "Password is required" })}
                 type="password"
-                defaultValue="elevate"
+                defaultValue={isSignUp ? "" : "elevate"}
                 className="w-full pl-14 pr-6 py-5 bg-white border border-[#E7E5E4] rounded-2xl text-[#1E1E1E] font-bold focus:ring-4 focus:ring-[#7A9B8E]/10 focus:border-[#1F4D3A] transition-all outline-none placeholder-[#6B7280]/20"
                 placeholder="••••••••"
               />
@@ -86,10 +121,19 @@ export default function Login() {
             {isLoading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
-              'Enter Sanctuary'
+              isSignUp ? 'Request Access' : 'Enter Sanctuary'
             )}
           </button>
         </form>
+        
+        <div className="mt-8 text-center">
+          <button 
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="text-[10px] font-black text-[#7A9B8E] uppercase tracking-widest hover:text-[#1F4D3A] transition-colors"
+          >
+            {isSignUp ? 'Already have access? Enter Sanctuary' : 'Need institutional access? Request here'}
+          </button>
+        </div>
         
         <div className="mt-12 pt-8 border-t border-[#E7E5E4] flex flex-col items-center">
           <p className="text-[9px] font-black text-[#7A9B8E] uppercase tracking-[0.3em] mb-4">Credentials for Audit</p>

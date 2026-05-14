@@ -137,18 +137,18 @@ export default function Customers() {
                   <td className="px-10 py-8">
                     <div className="flex items-center">
                       <div className="w-14 h-14 rounded-2xl bg-offwhite border border-beige flex items-center justify-center text-forest font-black text-lg mr-5 shadow-sm group-hover:bg-forest group-hover:text-white transition-all">
-                        {customer.name.charAt(0)}
+                        {customer?.name?.charAt(0) || '?'}
                       </div>
                       <div>
-                        <p className="font-extrabold text-forest text-base leading-tight">{customer.name}</p>
-                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{customer.id}</p>
+                        <p className="font-extrabold text-forest text-base leading-tight">{customer?.name || 'Unknown'}</p>
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{customer?.id || 'NO_ID'}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-10 py-8 hidden md:table-cell">
                     <div className="space-y-1.5">
-                      <p className="text-sm font-extrabold text-forest flex items-center"><Phone size={12} className="mr-2 text-sage" /> {customer.contact}</p>
-                      <p className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center"><MapPin size={12} className="mr-2 text-gold" /> {customer.address.split(',')[0]}</p>
+                      <p className="text-sm font-extrabold text-forest flex items-center"><Phone size={12} className="mr-2 text-sage" /> {customer?.contact || 'No Contact'}</p>
+                      <p className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center"><MapPin size={12} className="mr-2 text-gold" /> {customer?.address?.split(',')[0] || 'Unknown Location'}</p>
                     </div>
                   </td>
                   <td className="px-10 py-8 hidden lg:table-cell">

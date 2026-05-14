@@ -38,12 +38,12 @@ export const AppProvider = ({ children }) => {
         if (sessionError) throw sessionError;
 
         if (session?.user) {
-          const { data: profile } = await supabase
+          const { data: profileData } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
-            .single();
-          setUser({ ...session.user, ...profile });
+            .maybeSingle();
+          setUser({ ...session.user, ...profileData });
           fetchData();
         }
       } catch (error) {
@@ -60,12 +60,12 @@ export const AppProvider = ({ children }) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        const { data: profile } = await supabase
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
-          .single();
-        setUser({ ...session.user, ...profile });
+          .maybeSingle();
+        setUser({ ...session.user, ...profileData });
         fetchData();
       } else {
         setUser(null);
@@ -107,34 +107,55 @@ export const AppProvider = ({ children }) => {
       if (clientData) setCustomers(clientData);
       const { data: memData } = await supabase.from('memberships').select('*').order('created_at', { ascending: false });
       if (memData) setMemberships(memData);
-      const today = new Date().toISOString().split('T')[0];
-      const { data: attData } = await supabase.from('attendance').select('*').eq('date', today);
-      if (attData) setAttendance(attData.map(a => ({ ...a, customerId: a.client_id })));
+      const { data: attData } = await supabase
+        .from('attendance')
+        .select('*, profiles(name)')
+        .eq('date', today);
+      if (attData) setAttendance(attData.map(a => ({ ...a, customerId: a.client_id, markedBy: a.profiles?.name })));
     } catch (error) {
       console.error('Data sync failed:', error.message);
     }
   };
 
   const login = async (credentials) => {
-    if (!supabase || isDemoMode) {
-      // Demo authentication fallback
-      if (credentials.email === 'coach@elevate.in' && credentials.password === 'elevate') {
-        const demoUser = { id: 'DEMO-001', name: 'Aditi Varma', email: credentials.email, role: 'Lead Coach' };
-        setUser(demoUser);
-        setIsDemoMode(true);
-        loadLocalData();
-        return demoUser;
-      }
-      throw new Error('Invalid credentials for Demo Mode. Use coach@elevate.in / elevate');
+    // Priority 1: Check for Demo Credentials first for easy testing
+    if (credentials.email === 'coach@elevate.in' && credentials.password === 'elevate') {
+      const demoUser = { 
+        id: 'DEMO-001', 
+        name: 'Aditi Varma', 
+        email: credentials.email, 
+        role: 'Lead Coach' 
+      };
+      setUser(demoUser);
+      setIsDemoMode(true);
+      loadLocalData();
+      return demoUser;
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: credentials.email,
-      password: credentials.password,
-    });
+    // Priority 2: Use Supabase if configured and not using demo credentials
+    if (supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      
+      // Fetch profile data after login
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .maybeSingle();
+        
+      const fullUser = { ...data.user, ...profileData };
+      setUser(fullUser);
+      setIsDemoMode(false);
+      fetchData();
+      return fullUser;
+    }
+
+    throw new Error('Invalid credentials or system not configured.');
   };
 
   const logout = async () => {
@@ -177,7 +198,7 @@ export const AppProvider = ({ children }) => {
         client_id: record.customerId, 
         date: record.date, 
         status: record.status,
-        marked_by: user.id 
+        user_id: user.id 
       }, { onConflict: 'client_id, date' })
       .select();
 
