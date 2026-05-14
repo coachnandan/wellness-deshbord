@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Wellness & Luxury Palette */
+    --background: #F7F6F2;
+    --foreground: #1E1E1E;
+    
+    --primary: #1F4D3A; /* Forest Green */
+    --primary-foreground: #F7F6F2;
+    
+    --secondary: #7A9B8E; /* Sage Green */
+    --secondary-foreground: #F7F6F2;
+    
+    --accent: #C2A878; /* Soft Gold */
+    --accent-foreground: #1E1E1E;
+    
+    --card: #FCFBF8; /* Warm White */
+    --card-foreground: #1E1E1E;
+    
+    --muted: #E7E5E4; /* Soft Beige Gray */
+    --muted-foreground: #6B7280; /* Muted Gray */
+    
+    --border: #E7E5E4;
+    --input: #E7E5E4;
+    
+    --success: #3A7D5D;
+    --hover: #2F5D50;
+    
+    --radius: 1.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-[var(--border)];
+  }
+  body {
+    @apply bg-[var(--background)] text-[var(--foreground)];
+    font-family: 'Manrope', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Manrope', sans-serif;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+  }
+}
+
+/* Luxury Wellness UI Utilities */
+.luxury-card {
+  @apply bg-[#FCFBF8] border border-[#E7E5E4] shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(31,77,58,0.08)];
+}
+
+.luxury-glass {
+  @apply bg-white/70 backdrop-blur-xl border border-white/40 shadow-sm;
+}
+
+.btn-luxury-primary {
+  @apply bg-[#1F4D3A] text-[#F7F6F2] px-8 py-3.5 rounded-2xl font-bold transition-all duration-300 hover:bg-[#2F5D50] hover:shadow-lg hover:shadow-[#1F4D3A]/20 active:scale-95;
+}
+
+.btn-luxury-secondary {
+  @apply bg-white border border-[#E7E5E4] text-[#1F4D3A] px-8 py-3.5 rounded-2xl font-bold transition-all duration-300 hover:bg-[#F7F6F2] active:scale-95;
+}
+
+.text-gold {
+  color: #C2A878;
+}
+
+.bg-forest {
+  background-color: #1F4D3A;
+}
+
+.bg-sage {
+  background-color: #7A9B8E;
+}
+
+.bg-off-white {
+  background-color: #F7F6F2;
+}
+
+/* Custom Scrollbar for Luxury feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F7F6F2;
+}
+::-webkit-scrollbar-thumb {
+  background: #E7E5E4;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #C2A878;
+}
+
+/* Smooth page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 500ms, transform 500ms;
+}
