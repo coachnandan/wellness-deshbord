@@ -3,6 +3,7 @@ import { CreditCard, AlertTriangle, CheckCircle, Clock, ShieldAlert, DollarSign,
 import { useAppContext } from '../context/AppContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
+import { supabase } from '../lib/supabaseClient';
 
 export default function Memberships() {
   const { memberships, customers, addMembership, addNewMember, renewMembership, user, sendWhatsAppAlert } = useAppContext();
@@ -84,7 +85,6 @@ export default function Memberships() {
     setIsDetailLoading(true);
     
     try {
-      const { supabase } = await import('../lib/supabaseClient');
       if (supabase) {
         // Fetch Renewal Logs
         const { data: logs } = await supabase
