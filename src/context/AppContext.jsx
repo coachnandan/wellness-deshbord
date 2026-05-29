@@ -1,7 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, isConfigured } from '../lib/supabaseClient';
 
 const AppContext = createContext();
+
+const ConfigErrorScreen = () => (
+  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F6F2', padding: '20px', fontFamily: 'sans-serif' }}>
+    <div style={{ background: 'white', padding: '40px', borderRadius: '24px', boxShadow: '0 10px 25px rgba(31,77,58,0.1)', maxWidth: '500px', textAlign: 'center', border: '1px solid #E7E5E4' }}>
+      <div style={{ width: '64px', height: '64px', background: '#ffebee', color: '#c62828', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: '24px', fontWeight: 'bold' }}>!</div>
+      <h2 style={{ color: '#1F4D3A', fontSize: '24px', fontWeight: '900', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Configuration Error</h2>
+      <p style={{ color: '#6B7280', fontSize: '14px', lineHeight: '1.6', marginBottom: '24px', fontWeight: '500' }}>
+        The application is missing required Supabase environment variables. If you are on Netlify, please add <strong style={{ color: '#1F4D3A' }}>VITE_SUPABASE_URL</strong> and <strong style={{ color: '#1F4D3A' }}>VITE_SUPABASE_ANON_KEY</strong> to your Site Settings and trigger a new deployment.
+      </p>
+    </div>
+  </div>
+);
 
 export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -53,7 +65,7 @@ export const AppProvider = ({ children }) => {
 
   // Check for active session using onAuthStateChange as the sole source of truth
   useEffect(() => {
-    if (!supabase) {
+    if (!isConfigured || !supabase) {
       setAuthLoading(false);
       return;
     }
@@ -162,7 +174,7 @@ export const AppProvider = ({ children }) => {
 
   // Real-time Subscriptions
   useEffect(() => {
-    if (!supabase || !user) return;
+    if (!isConfigured || !supabase || !user) return;
     const isMember = user.role === 'member';
 
     let clientsChannel = supabase
@@ -711,6 +723,10 @@ export const AppProvider = ({ children }) => {
       }
     }
   };
+
+  if (!isConfigured) {
+    return <ConfigErrorScreen />;
+  }
 
   return (
     <AppContext.Provider value={{

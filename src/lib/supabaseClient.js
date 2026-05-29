@@ -1,15 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || '';
 
-console.log("Supabase Client Init: URL =", supabaseUrl, "Key =", supabaseAnonKey ? "PRESENT" : "MISSING");
-
-const isConfigured = 
+export const isConfigured = Boolean(
   supabaseUrl && 
-  supabaseUrl.includes('supabase.co') && 
-  !supabaseUrl.includes('your-project-id');
+  supabaseAnonKey &&
+  supabaseUrl.startsWith('http') &&
+  !supabaseUrl.includes('your-project-id')
+);
 
+// We export null if not configured to prevent immediate module crash,
+// but we expect AppContext to handle this gracefully.
 export const supabase = isConfigured 
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
