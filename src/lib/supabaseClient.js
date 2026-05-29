@@ -10,6 +10,12 @@ export const isConfigured = Boolean(
   !supabaseUrl.includes('your-project-id')
 );
 
+if (!isConfigured) {
+  console.error(
+    "Missing or invalid Supabase configuration. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your environment variables."
+  );
+}
+
 // We export null if not configured to prevent immediate module crash,
 // but we expect AppContext to handle this gracefully.
 export const supabase = isConfigured 

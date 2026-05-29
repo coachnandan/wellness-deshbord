@@ -1,18 +1,21 @@
-import AccessDenied from '../pages/AccessDenied';
+import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
 import Login from '../pages/Login';
-import Dashboard from '../pages/Dashboard';
-import Customers from '../pages/Customers';
-import Attendance from '../pages/Attendance';
-import Memberships from '../pages/Memberships';
 import RoleSelection from '../pages/RoleSelection';
 import Signup from '../pages/Signup';
-import Notifications from '../pages/Notifications';
-import Analytics from '../pages/Analytics';
-import Settings from '../pages/Settings';
-import Profile from '../pages/Profile';
+import Loader from '../components/Loader';
 import { useAppContext } from '../context/AppContext';
+
+const Dashboard = React.lazy(() => import('../pages/Dashboard'));
+const Customers = React.lazy(() => import('../pages/Customers'));
+const Attendance = React.lazy(() => import('../pages/Attendance'));
+const Memberships = React.lazy(() => import('../pages/Memberships'));
+const Notifications = React.lazy(() => import('../pages/Notifications'));
+const Analytics = React.lazy(() => import('../pages/Analytics'));
+const Settings = React.lazy(() => import('../pages/Settings'));
+const Profile = React.lazy(() => import('../pages/Profile'));
+const AccessDenied = React.lazy(() => import('../pages/AccessDenied'));
 
 /**
  * AuthGate — blocks ALL rendering until auth check is complete.
@@ -23,25 +26,7 @@ const AuthGate = ({ children }) => {
   const { authLoading } = useAppContext();
 
   if (authLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#F7F6F2'
-      }}>
-        <div style={{
-          width: 48,
-          height: 48,
-          border: '4px solid #1F4D3A',
-          borderTopColor: 'transparent',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite'
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
+    return <Loader />;
   }
 
   return children;
@@ -51,25 +36,7 @@ const AuthGate = ({ children }) => {
 const ProtectedRoute = ({ children }) => {
   const { user, authLoading } = useAppContext();
   if (authLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#F7F6F2'
-      }}>
-        <div style={{
-          width: 48,
-          height: 48,
-          border: '4px solid #1F4D3A',
-          borderTopColor: 'transparent',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite'
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
+    return <Loader />;
   }
   if (!user) {
     return <Navigate to="/role-selection" replace />;
@@ -113,120 +80,122 @@ function RootRedirect() {
 export default function AppRoutes() {
   return (
     <AuthGate>
-      <Routes>
-        {/* PUBLIC ROUTES */}
-        <Route path="/" element={<RootRedirect />} />
-        <Route
-          path="/role-selection"
-          element={
-            <PublicOnlyRoute>
-              <RoleSelection />
-            </PublicOnlyRoute>
-          }
-        />
-        <Route
-          path="/login"
-          element={
-            <PublicOnlyRoute>
-              <Login />
-            </PublicOnlyRoute>
-          }
-        />
-        <Route
-          path="/signup"
-          element={
-            <PublicOnlyRoute>
-              <Signup />
-            </PublicOnlyRoute>
-          }
-        />
-
-        {/* PROTECTED ROUTES — require authentication */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <MainLayout />
-            </ProtectedRoute>
-          }
-        >
+      <Suspense fallback={<Loader />}>
+        <Routes>
+          {/* PUBLIC ROUTES */}
+          <Route path="/" element={<RootRedirect />} />
           <Route
-            path="dashboard"
+            path="/role-selection"
+            element={
+              <PublicOnlyRoute>
+                <RoleSelection />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <Login />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              <PublicOnlyRoute>
+                <Signup />
+              </PublicOnlyRoute>
+            }
+          />
+
+          {/* PROTECTED ROUTES — require authentication */}
+          <Route
+            path="/"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <MainLayout />
               </ProtectedRoute>
             }
-          />
-          <Route
-            path="clients"
-            element={
-              <ProtectedRoute>
-                <Customers />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="attendance"
-            element={
-              <AdminRoute>
-                <Attendance />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="memberships"
-            element={
-              <AdminRoute>
-                <Memberships />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="notifications"
-            element={
-              <AdminRoute>
-                <Notifications />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="analytics"
-            element={
-              <AdminRoute>
-                <Analytics />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="settings"
-            element={
-              <AdminRoute>
-                <Settings />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="profile"
-            element={
-              <AdminRoute>
-                <Profile />
-              </AdminRoute>
-            }
-          />
-        </Route>
+          >
+            <Route
+              path="dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="clients"
+              element={
+                <ProtectedRoute>
+                  <Customers />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="attendance"
+              element={
+                <AdminRoute>
+                  <Attendance />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="memberships"
+              element={
+                <AdminRoute>
+                  <Memberships />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="notifications"
+              element={
+                <AdminRoute>
+                  <Notifications />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="analytics"
+              element={
+                <AdminRoute>
+                  <Analytics />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <AdminRoute>
+                  <Settings />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="profile"
+              element={
+                <AdminRoute>
+                  <Profile />
+                </AdminRoute>
+              }
+            />
+          </Route>
 
-        <Route
-          path="/access-denied"
-          element={<AccessDenied />}
-        />
+          <Route
+            path="/access-denied"
+            element={<AccessDenied />}
+          />
 
-        {/* Catch-all: redirect */}
-        <Route
-          path="*"
-          element={<CatchAllRedirect />}
-        />
-      </Routes>
+          {/* Catch-all: redirect */}
+          <Route
+            path="*"
+            element={<CatchAllRedirect />}
+          />
+        </Routes>
+      </Suspense>
     </AuthGate>
   );
 }

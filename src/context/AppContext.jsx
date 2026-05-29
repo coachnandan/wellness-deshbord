@@ -180,6 +180,7 @@ export const AppProvider = ({ children }) => {
     let clientsChannel = supabase
       .channel('schema-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, (payload) => {
+        if (!payload || (!payload.new && !payload.old)) return;
         if (payload.eventType === 'INSERT' && payload.new) {
           const newClient = (() => {
             try {
@@ -221,6 +222,7 @@ export const AppProvider = ({ children }) => {
     if (!isMember) {
       clientsChannel = clientsChannel
         .on('postgres_changes', { event: '*', schema: 'public', table: 'memberships' }, (payload) => {
+          if (!payload || (!payload.new && !payload.old)) return;
           if (payload.eventType === 'INSERT' && payload.new) {
             const mapped = {
               ...payload.new,
@@ -247,6 +249,7 @@ export const AppProvider = ({ children }) => {
           }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, (payload) => {
+          if (!payload || (!payload.new && !payload.old)) return;
           if (payload.eventType === 'INSERT' && payload.new) {
             const newAtt = { ...payload.new, customerId: payload.new.client_id };
             setAttendance(prev => {
@@ -260,6 +263,7 @@ export const AppProvider = ({ children }) => {
           }
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notification_logs' }, (payload) => {
+          if (!payload || !payload.new) return;
           if (payload.new) {
             setNotifications(prev => {
               if (prev.some(n => n.id === payload.new.id)) return prev;
