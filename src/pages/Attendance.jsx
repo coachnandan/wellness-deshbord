@@ -142,7 +142,7 @@ export default function Attendance() {
             </div>
           </div>
           <div className="flex-1 h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={weeklyFlowData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E7E5E4" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 10, fontWeight: 700}} dy={15} />

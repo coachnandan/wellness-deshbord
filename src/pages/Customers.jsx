@@ -5,7 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
 
 export default function Customers() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer } = useAppContext();
+  const { customers, addCustomer, updateCustomer, deleteCustomer, dataLoading } = useAppContext();
   
   // States
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,7 +55,7 @@ export default function Customers() {
   const onSubmit = async (data) => {
     try {
       if (editingCustomer) {
-        await updateCustomer(data);
+        await updateCustomer(editingCustomer.id, data);
         toast.success('Client profile updated with care');
       } else {
         await addCustomer(data);
@@ -132,64 +132,104 @@ export default function Customers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-beige/40">
-              {currentCustomers.map((customer) => (
-                <tr key={customer.id} className="hover:bg-offwhite transition-colors group">
-                  <td className="px-10 py-8">
-                    <div className="flex items-center">
-                      <div className="w-14 h-14 rounded-2xl bg-offwhite border border-beige flex items-center justify-center text-forest font-black text-lg mr-5 shadow-sm group-hover:bg-forest group-hover:text-white transition-all">
-                        {customer?.name?.charAt(0) || '?'}
+              {dataLoading ? (
+                [1, 2, 3, 4, 5].map(i => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-10 py-8">
+                      <div className="flex items-center">
+                        <div className="w-14 h-14 rounded-2xl bg-sage/10 mr-5"></div>
+                        <div className="space-y-2">
+                          <div className="w-28 h-4 bg-sage/10 rounded"></div>
+                          <div className="w-16 h-3 bg-sage/10 rounded"></div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-extrabold text-forest text-base leading-tight">{customer?.name || 'Unknown'}</p>
-                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{customer?.id || 'NO_ID'}</p>
+                    </td>
+                    <td className="px-10 py-8 hidden md:table-cell">
+                      <div className="space-y-2">
+                        <div className="w-32 h-4 bg-sage/10 rounded"></div>
+                        <div className="w-24 h-3 bg-sage/10 rounded"></div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-10 py-8 hidden md:table-cell">
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-extrabold text-forest flex items-center"><Phone size={12} className="mr-2 text-sage" /> {customer?.contact || 'No Contact'}</p>
-                      <p className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center"><MapPin size={12} className="mr-2 text-gold" /> {customer?.address?.split(',')[0] || 'Unknown Location'}</p>
-                    </div>
-                  </td>
-                  <td className="px-10 py-8 hidden lg:table-cell">
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-extrabold text-forest flex items-center"><Briefcase size={14} className="mr-2 text-sage" /> {customer.profession}</p>
-                      <p className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center"><Activity size={14} className="mr-2 text-gold" /> {customer.purpose}</p>
-                    </div>
-                  </td>
-                  <td className="px-10 py-8">
-                    <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border ${
-                      customer.status === 'Active' ? 'bg-emerald/5 text-emerald border-emerald/20' : 'bg-red-50 text-red-600 border-red-100'
-                    }`}>
-                      {customer.status}
-                    </span>
-                  </td>
-                  <td className="px-10 py-8 text-right relative">
-                    <button 
-                      onClick={() => setActiveDropdown(activeDropdown === customer.id ? null : customer.id)}
-                      className="p-3 text-muted hover:text-forest bg-offwhite border border-beige rounded-xl transition-all shadow-sm group-hover:shadow-md"
-                    >
-                      <MoreVertical size={20} />
-                    </button>
-                    {activeDropdown === customer.id && (
-                      <div className="absolute right-14 top-12 w-48 bg-white rounded-2xl shadow-2xl border border-beige z-20 overflow-hidden animate-in zoom-in-95 duration-200">
-                        <button 
-                          onClick={() => handleOpenModal(customer)}
-                          className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-forest hover:bg-offwhite transition-colors flex items-center"
-                        >
-                          <Edit3 size={16} className="mr-3 text-sage" /> Edit Profile
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(customer.id)}
-                          className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 transition-colors flex items-center"
-                        >
-                          <Trash2 size={16} className="mr-3" /> Archive Profile
-                        </button>
+                    </td>
+                    <td className="px-10 py-8 hidden lg:table-cell">
+                      <div className="space-y-2">
+                        <div className="w-24 h-4 bg-sage/10 rounded"></div>
+                        <div className="w-20 h-3 bg-sage/10 rounded"></div>
                       </div>
-                    )}
+                    </td>
+                    <td className="px-10 py-8">
+                      <div className="w-16 h-6 bg-sage/10 rounded-xl"></div>
+                    </td>
+                    <td className="px-10 py-8 text-right">
+                      <div className="inline-block w-10 h-10 bg-sage/10 rounded-xl"></div>
+                    </td>
+                  </tr>
+                ))
+              ) : currentCustomers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-10 py-16 text-center text-muted font-medium">
+                    No clients found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                currentCustomers.map((customer) => (
+                  <tr key={customer.id} className="hover:bg-offwhite transition-colors group">
+                    <td className="px-10 py-8">
+                      <div className="flex items-center">
+                        <div className="w-14 h-14 rounded-2xl bg-offwhite border border-beige flex items-center justify-center text-forest font-black text-lg mr-5 shadow-sm group-hover:bg-forest group-hover:text-white transition-all">
+                          {customer?.name?.charAt(0) || '?'}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-forest text-base leading-tight">{customer?.name || 'Unknown'}</p>
+                          <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{customer?.id || 'NO_ID'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-10 py-8 hidden md:table-cell">
+                      <div className="space-y-1.5">
+                        <p className="text-sm font-extrabold text-forest flex items-center"><Phone size={12} className="mr-2 text-sage" /> {customer?.contact || 'No Contact'}</p>
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center"><MapPin size={12} className="mr-2 text-gold" /> {customer?.address?.split(',')[0] || 'Unknown Location'}</p>
+                      </div>
+                    </td>
+                    <td className="px-10 py-8 hidden lg:table-cell">
+                      <div className="space-y-1.5">
+                        <p className="text-sm font-extrabold text-forest flex items-center"><Briefcase size={14} className="mr-2 text-sage" /> {customer.profession}</p>
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center"><Activity size={14} className="mr-2 text-gold" /> {customer.purpose}</p>
+                      </div>
+                    </td>
+                    <td className="px-10 py-8">
+                      <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border ${
+                        customer.status === 'Active' ? 'bg-emerald/5 text-emerald border-emerald/20' : 'bg-red-50 text-red-600 border-red-100'
+                      }`}>
+                        {customer.status}
+                      </span>
+                    </td>
+                    <td className="px-10 py-8 text-right relative">
+                      <button 
+                        onClick={() => setActiveDropdown(activeDropdown === customer.id ? null : customer.id)}
+                        className="p-3 text-muted hover:text-forest bg-offwhite border border-beige rounded-xl transition-all shadow-sm group-hover:shadow-md"
+                      >
+                        <MoreVertical size={20} />
+                      </button>
+                      {activeDropdown === customer.id && (
+                        <div className="absolute right-14 top-12 w-48 bg-white rounded-2xl shadow-2xl border border-beige z-20 overflow-hidden animate-in zoom-in-95 duration-200">
+                          <button 
+                            onClick={() => handleOpenModal(customer)}
+                            className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-forest hover:bg-offwhite transition-colors flex items-center"
+                          >
+                            <Edit3 size={16} className="mr-3 text-sage" /> Edit Profile
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(customer.id)}
+                            className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 transition-colors flex items-center"
+                          >
+                            <Trash2 size={16} className="mr-3" /> Archive Profile
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -242,8 +282,12 @@ export default function Customers() {
                   <input {...register("name", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Aditi Sharma" />
                 </div>
                 <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Professional Contact</label>
-                  <input {...register("contact", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="+91 00000 00000" />
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Institutional Email</label>
+                  <input {...register("email")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="coach@anandam.in" />
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">WhatsApp (Optional)</label>
+                  <input {...register("whatsapp_number")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="Same as contact if blank" />
                 </div>
                 <div className="space-y-3 sm:col-span-2">
                   <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Primary Residence</label>

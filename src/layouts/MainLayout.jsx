@@ -10,24 +10,35 @@ import {
   X,
   Bell,
   User as UserIcon,
-  Leaf
+  Leaf,
+  BarChart3,
+  Settings
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import NotificationPopup from '../components/NotificationPopup';
+import ProfilePopup from '../components/ProfilePopup';
 
-const navItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Clients', path: '/customers', icon: Users },
+const adminNavItems = [
+  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { name: 'Clients', path: '/clients', icon: Users },
   { name: 'Attendance', path: '/attendance', icon: CalendarCheck },
-  { name: 'Membership', path: '/memberships', icon: CreditCard },
+  { name: 'Memberships', path: '/memberships', icon: CreditCard },
+];
+
+const memberNavItems = [
+  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { name: 'Clients', path: '/clients', icon: Users },
 ];
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { logout, user } = useAppContext();
   const navigate = useNavigate();
+  const isAdmin = user?.role === 'admin';
+  const navItems = isAdmin ? adminNavItems : memberNavItems;
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/role-selection');
   };
 
   return (
@@ -37,8 +48,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           <div className="w-10 h-10 bg-sage rounded-xl flex items-center justify-center shadow-lg shadow-black/10 group-hover:scale-110 transition-transform duration-500">
             <Leaf className="w-6 h-6 text-white" />
           </div>
-          <span className="text-2xl font-extrabold tracking-tight text-white group-hover:tracking-wider transition-all duration-500 uppercase">
-            ELEVATE
+          <span className="text-xl font-extrabold tracking-tight text-white group-hover:tracking-wider transition-all duration-500 uppercase">
+            Anandam Wellness
           </span>
         </div>
         <button onClick={toggleSidebar} className="lg:hidden text-white/60 hover:text-white transition-colors">
@@ -98,8 +109,13 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 };
 
 const Header = ({ toggleSidebar }) => {
-  const { user } = useAppContext();
-  
+  const { user, notifications } = useAppContext();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+
+
+  const unreadCount = notifications.length; // Simplified for this example
+
   return (
     <header className="flex items-center justify-between h-24 px-6 sm:px-10 bg-offwhite/80 backdrop-blur-xl border-b border-beige/50 sticky top-0 z-40">
       <div className="flex items-center">
@@ -111,24 +127,64 @@ const Header = ({ toggleSidebar }) => {
         </button>
         <div>
           <h2 className="text-xl sm:text-2xl font-extrabold text-forest tracking-tight leading-tight">Namaste, {user?.name?.split(' ')[0] || 'Aditi'}</h2>
-          <p className="text-xs sm:text-sm text-muted font-bold tracking-tight">Today is a beautiful day for wellness.</p>
+          <p className="text-xs sm:text-sm text-muted font-bold tracking-tight">Welcome back to your workspace.</p>
         </div>
       </div>
 
-      <div className="flex items-center space-x-4 sm:space-x-6">
-        <button className="relative p-3 text-forest bg-white border border-beige/50 rounded-xl hover:bg-offwhite transition-all shadow-sm group">
-          <Bell size={20} className="group-hover:rotate-12 transition-transform" />
-          <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-gold rounded-full border-2 border-white shadow-sm"></span>
-        </button>
-        <div className="w-12 h-12 rounded-2xl bg-white border border-beige/50 p-1 shadow-sm overflow-hidden flex items-center justify-center hover:scale-105 transition-transform cursor-pointer">
+      <div className="flex items-center space-x-4 sm:space-x-6 relative">
+        {user?.role === 'admin' && (
+          <button 
+            onClick={() => { setShowNotifications(!showNotifications); setShowProfile(false); }}
+            className={`relative p-3 text-forest border border-beige/50 rounded-xl transition-all shadow-sm group ${showNotifications ? 'bg-beige/20 ring-4 ring-sage/10' : 'bg-white hover:bg-offwhite'}`}
+          >
+            <Bell size={20} className="group-hover:rotate-12 transition-transform" />
+            {unreadCount > 0 && (
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-gold rounded-full border-2 border-white shadow-sm animate-pulse" />
+            )}
+          </button>
+        )}
+        {showNotifications && <NotificationPopup onClose={() => setShowNotifications(false)} />}
+
+        <div 
+          onClick={() => { setShowProfile(!showProfile); setShowNotifications(false); }}
+          className={`w-12 h-12 rounded-2xl border border-beige/50 p-1 shadow-sm overflow-hidden flex items-center justify-center hover:scale-105 transition-all cursor-pointer relative ${showProfile ? 'ring-4 ring-sage/10 scale-105' : 'bg-white'}`}
+        >
              <img 
                src={`https://ui-avatars.com/api/?name=${user?.name || 'Aditi'}&background=1F4D3A&color=F7F6F2&bold=true`} 
                alt="Avatar" 
                className="w-full h-full rounded-xl object-cover" 
              />
         </div>
+
+        {showProfile && <ProfilePopup onClose={() => setShowProfile(false)} />}
       </div>
     </header>
+  );
+};
+
+const MobileNav = () => {
+  const { user } = useAppContext();
+  const isAdmin = user?.role === 'admin';
+  const navItems = isAdmin ? adminNavItems : memberNavItems;
+
+  return (
+    <nav className="lg:hidden fixed bottom-6 left-6 right-6 bg-forest/90 backdrop-blur-xl rounded-[2.5rem] z-[45] px-8 py-5 shadow-2xl border border-white/10 ring-8 ring-offwhite/80 transition-all duration-500">
+      <div className="flex items-center justify-around">
+        {navItems.slice(0, 4).map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.path}
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-2 transition-all duration-500 ${
+                isActive ? 'text-gold scale-125' : 'text-white/40'
+              }`
+            }
+          >
+            <item.icon size={20} />
+          </NavLink>
+        ))}
+      </div>
+    </nav>
   );
 };
 
@@ -152,23 +208,7 @@ export default function MainLayout() {
       </div>
 
       {/* Bottom Navigation for Mobile */}
-      <nav className="lg:hidden fixed bottom-6 left-6 right-6 bg-forest/90 backdrop-blur-xl rounded-[2.5rem] z-[45] px-8 py-5 shadow-2xl border border-white/10 ring-8 ring-offwhite/80 transition-all duration-500">
-        <div className="flex items-center justify-between">
-          {navItems.slice(0, 4).map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex flex-col items-center gap-2 transition-all duration-500 ${
-                  isActive ? 'text-gold scale-125' : 'text-white/40'
-                }`
-              }
-            >
-              <item.icon size={20} />
-            </NavLink>
-          ))}
-        </div>
-      </nav>
+      <MobileNav />
 
       {/* Overlay for mobile sidebar */}
       {isSidebarOpen && (
