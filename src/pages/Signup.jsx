@@ -46,7 +46,12 @@ export default function Signup() {
         navigate('/login');
       }
     } catch (error) {
-      toast.error(error.message || 'Authentication failed. Please check your inputs.');
+      if (error.message?.includes('already registered')) {
+        toast.info('An account with this email already exists. Please login.');
+        navigate('/login');
+      } else {
+        toast.error(error.message || 'Authentication failed. Please check your inputs.');
+      }
     } finally {
       setIsLoading(false);
     }

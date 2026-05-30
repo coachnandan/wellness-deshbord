@@ -3,8 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
+// Debug logs to confirm env vars are loaded
+console.log("Supabase URL Available:", !!import.meta.env.VITE_SUPABASE_URL);
+console.log("Supabase Key Available:", !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+
 export const isConfigured = Boolean(
-  supabaseUrl && 
+  supabaseUrl &&
   supabaseAnonKey &&
   supabaseUrl.startsWith('http') &&
   !supabaseUrl.includes('your-project-id')
@@ -12,13 +16,12 @@ export const isConfigured = Boolean(
 
 if (!isConfigured) {
   console.error(
-    "Missing or invalid Supabase configuration. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your environment variables."
+    "Missing Supabase environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY"
   );
 }
 
-// We export null if not configured to prevent immediate module crash,
-// but we expect AppContext to handle this gracefully.
-export const supabase = isConfigured 
+// Return null if not configured — AppContext will render the graceful error screen
+export const supabase = isConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
