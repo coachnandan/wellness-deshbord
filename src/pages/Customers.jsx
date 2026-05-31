@@ -278,33 +278,42 @@ export default function Customers() {
             <form onSubmit={handleSubmit(onSubmit)} className="p-10 sm:p-12 space-y-8">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                 <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Legal Full Name</label>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Name</label>
                   <input {...register("name", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Aditi Sharma" />
                 </div>
                 <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Institutional Email</label>
-                  <input {...register("email")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="coach@anandam.in" />
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact (Email/Phone)</label>
+                  <input {...register("contact")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="coach@anandam.in" />
                 </div>
                 <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">WhatsApp (Optional)</label>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact Number</label>
+                  <input {...register("contact_number")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="+91 98765 43210" />
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">WhatsApp</label>
                   <input {...register("whatsapp_number")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="Same as contact if blank" />
                 </div>
                 <div className="space-y-3 sm:col-span-2">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Primary Residence</label>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Address</label>
                   <input {...register("address", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="Street, City, State" />
                 </div>
                 <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Wellness Goal</label>
-                  <select {...register("purpose")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
-                    <option value="Health">Health & Vitality</option>
-                    <option value="Business">Entrepreneurial Harmony</option>
-                  </select>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Profession</label>
+                  <input {...register("profession")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Architect" />
                 </div>
                 <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Current Status</label>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Purpose</label>
+                  <input {...register("purpose")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Health & Vitality" />
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referral Source</label>
+                  <input {...register("referral_source")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Instagram" />
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Status</label>
                   <select {...register("status")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
-                    <option value="Active">Active Presence</option>
-                    <option value="Inactive">Paused</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
                   </select>
                 </div>
               </div>

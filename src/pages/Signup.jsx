@@ -36,8 +36,31 @@ export default function Signup() {
           }
         }
       });
-      if (error) throw error;
-      
+      if (error) {
+        if (error.message?.includes('already registered')) {
+          toast.info('An account with this email already exists. Please login.');
+          navigate('/login');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      // Explicitly write role into profiles table immediately after signup
+      // This ensures role is always correct in DB and never relies solely on JWT metadata
+      const userId = authData?.user?.id;
+      if (userId) {
+        const { error: profileError } = await supabase.from('profiles').upsert(
+          [{ id: userId, name: data.name || 'Anonymous', role: selectedRole || 'member' }],
+          { onConflict: 'id' }
+        );
+        if (profileError) {
+          console.warn('[Signup] Profile upsert failed:', profileError.message);
+        } else {
+          console.log(`[Signup] Profile created: role=${selectedRole || 'member'}`);
+        }
+      }
+
       if (authData?.session) {
         toast.success('Sanctuary account created. Welcome to the Sanctuary!');
         navigate('/');

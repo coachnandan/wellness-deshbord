@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, isConfigured } from '../lib/supabaseClient';
+import useRealtime from '../hooks/useRealtime';
 
 const AppContext = createContext();
 
@@ -32,38 +33,72 @@ export const AppProvider = ({ children }) => {
   const session = sessionData;
 
   const customersRef = React.useRef([]);
+  const attendanceRef = React.useRef([]);
+  const membershipsRef = React.useRef([]);
+  const notificationsRef = React.useRef([]);
+  
   useEffect(() => {
     customersRef.current = customers;
-  }, [customers]);
+    attendanceRef.current = attendance;
+    membershipsRef.current = memberships;
+    notificationsRef.current = notifications;
+  }, [customers, attendance, memberships, notifications]);
+
+  // Initialize realtime subscriptions after auth is resolved
+  useRealtime({
+    supabase,
+    setCustomers,
+    setAttendance,
+    setMemberships,
+    setNotifications,
+    customersRef,
+    attendanceRef,
+    membershipsRef,
+    notificationsRef,
+  });
 
   const resolveUserProfile = async (sessionUser) => {
     if (!supabase) return { ...sessionUser, role: 'member', name: sessionUser.email?.split('@')[0] || 'Member' };
     
-    // Default from metadata (instant, no DB call needed)
+    // Metadata values used ONLY as fallback (when DB is unreachable/timed out)
     const metaRole = sessionUser.user_metadata?.role || 'member';
     const metaName = sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'Member';
     
     try {
-      // Race between DB call and 3s timeout
+      // Always fetch role from DB — never trust stale JWT metadata for role
       const profilePromise = supabase.from('profiles').select('*').eq('id', sessionUser.id).maybeSingle();
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
       
       const { data: profileData, error: profileError } = await Promise.race([profilePromise, timeoutPromise]);
 
-      if (profileData) {
-        return { ...sessionUser, role: profileData.role || metaRole, name: profileData.name || metaName };
+      if (profileError) {
+        console.warn('Profile fetch error:', profileError.message);
       }
 
-      // No profile exists yet — create one in background, return metadata values immediately
-      supabase.from('profiles').insert([{ id: sessionUser.id, name: metaName, role: metaRole }]).select().maybeSingle();
+      if (profileData) {
+        // Role always comes from DB — this is the source of truth
+        const dbRole = profileData.role || 'member';
+        const dbName = profileData.name || metaName;
+        console.log(`[Auth] Role resolved from DB: ${dbRole} for ${sessionUser.email}`);
+        return { ...sessionUser, role: dbRole, name: dbName };
+      }
+
+      // No profile found — create one using signup metadata role
+      console.log(`[Auth] No profile found for ${sessionUser.email}. Creating with role: ${metaRole}`);
+      await supabase.from('profiles').upsert(
+        [{ id: sessionUser.id, name: metaName, role: metaRole }],
+        { onConflict: 'id' }
+      );
       return { ...sessionUser, role: metaRole, name: metaName };
     } catch (err) {
-      console.warn('Profile fetch skipped (slow/timeout):', err.message);
+      // DB unreachable — fall back to metadata role (only on timeout)
+      console.warn('[Auth] Profile fetch timed out, using metadata role as fallback:', err.message);
       return { ...sessionUser, role: metaRole, name: metaName };
     }
   };
 
-  // Check for active session using onAuthStateChange as the sole source of truth
+  // Check for active session using onAuthStateChange as the sole source of truth.
+  // Role is always fetched fresh from the profiles table on every session event.
   useEffect(() => {
     if (!isConfigured || !supabase) {
       setAuthLoading(false);
@@ -172,121 +207,8 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Real-time Subscriptions
-  useEffect(() => {
-    if (!isConfigured || !supabase || !user) return;
-    const isMember = user.role === 'member';
+  // Real-time Subscriptions — only active when authenticated and configured
 
-    let clientsChannel = supabase
-      .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, (payload) => {
-        if (!payload || (!payload.new && !payload.old)) return;
-        if (payload.eventType === 'INSERT' && payload.new) {
-          const newClient = (() => {
-            try {
-              const meta = typeof payload.new.address === 'string' ? JSON.parse(payload.new.address) : payload.new.address;
-              return { ...payload.new, ...meta, address: meta.address || payload.new.address };
-            } catch {
-              return payload.new;
-            }
-          })();
-          setCustomers(prev => {
-            if (prev.some(c => c.id === newClient.id)) return prev;
-            return [newClient, ...prev];
-          });
-          if (!isMember) {
-            setMemberships(prev => {
-              if (prev.some(m => m.client_id === payload.new.id || m.customerId === payload.new.id)) return prev;
-              return [{
-                id: `PENDING-${payload.new.id}`,
-                client_id: payload.new.id,
-                customerId: payload.new.id,
-                membership_plan: 'No Plan',
-                plan: 'No Plan',
-                amount: 0,
-                status: 'Pending',
-                payment_status: 'Unpaid',
-                renewal_status: 'New',
-                startDate: new Date().toISOString().split('T')[0],
-                expiryDate: new Date().toISOString().split('T')[0]
-              }, ...prev];
-            });
-          }
-        } else if (payload.eventType === 'UPDATE' && payload.new) {
-          setCustomers(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
-        } else if (payload.eventType === 'DELETE' && payload.old) {
-          setCustomers(prev => prev.filter(c => c.id !== payload.old.id));
-        }
-      });
-
-    if (!isMember) {
-      clientsChannel = clientsChannel
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'memberships' }, (payload) => {
-          if (!payload || (!payload.new && !payload.old)) return;
-          if (payload.eventType === 'INSERT' && payload.new) {
-            const mapped = {
-              ...payload.new,
-              customerId: payload.new.client_id,
-              plan: payload.new.membership_plan,
-              startDate: payload.new.start_date,
-              expiryDate: payload.new.expiry_date
-            };
-            setMemberships(prev => {
-              if (prev.some(m => m.id === mapped.id)) return prev;
-              return [mapped, ...prev.filter(m => m.id !== `PENDING-${payload.new.client_id}`)];
-            });
-          } else if (payload.eventType === 'UPDATE' && payload.new) {
-            const mapped = {
-              ...payload.new,
-              customerId: payload.new.client_id,
-              plan: payload.new.membership_plan,
-              startDate: payload.new.start_date,
-              expiryDate: payload.new.expiry_date
-            };
-            setMemberships(prev => prev.map(m => m.id === mapped.id ? mapped : m));
-          } else if (payload.eventType === 'DELETE' && payload.old) {
-            setMemberships(prev => prev.filter(m => m.id !== payload.old.id));
-          }
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, (payload) => {
-          if (!payload || (!payload.new && !payload.old)) return;
-          if (payload.eventType === 'INSERT' && payload.new) {
-            const newAtt = { ...payload.new, customerId: payload.new.client_id };
-            setAttendance(prev => {
-              if (prev.some(a => a.id === newAtt.id)) return prev;
-              return [newAtt, ...prev];
-            });
-          } else if (payload.eventType === 'UPDATE' && payload.new) {
-            setAttendance(prev => prev.map(a => a.id === payload.new.id ? { ...payload.new, customerId: payload.new.client_id } : a));
-          } else if (payload.eventType === 'DELETE' && payload.old) {
-            setAttendance(prev => prev.filter(a => a.id !== payload.old.id));
-          }
-        })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notification_logs' }, (payload) => {
-          if (!payload || !payload.new) return;
-          if (payload.new) {
-            setNotifications(prev => {
-              if (prev.some(n => n.id === payload.new.id)) return prev;
-              const matchedClient = customersRef.current.find(c => c.id === payload.new.client_id);
-              const enriched = {
-                ...payload.new,
-                clients: matchedClient ? { name: matchedClient.name } : null
-              };
-              return [enriched, ...prev].slice(0, 10);
-            });
-          }
-        });
-    }
-
-    clientsChannel.subscribe();
-
-    return () => {
-      if (clientsChannel) {
-        clientsChannel.unsubscribe();
-        supabase.removeChannel(clientsChannel);
-      }
-    };
-  }, [supabase, user]);
 
   const login = async (credentials) => {
     if (supabase) {
@@ -325,18 +247,19 @@ export const AppProvider = ({ children }) => {
   };
 
   const addCustomer = async (customerData) => {
-    const contactValue = customerData.contact || customerData.whatsapp_number || customerData.email || 'No Contact';
-    const meta = {
-      profession: customerData.profession || '',
-      purpose: customerData.purpose || 'Health',
-      referral_source: customerData.referral_source || customerData.referralSource || 'Instagram',
-      joining_date: customerData.joining_date || customerData.joiningDate || new Date().toISOString().split('T')[0],
-      whatsapp_number: customerData.whatsapp_number || contactValue
-    };
+    const contactValue = customerData.contact || customerData.email || 'No Contact';
+    const whatsappValue = customerData.whatsapp_number || contactValue;
+    
     const insertPayload = {
       name: customerData.name,
       contact: contactValue,
-      address: JSON.stringify({ address: customerData.address, ...meta }),
+      contact_number: customerData.contact_number || '',
+      whatsapp_number: whatsappValue,
+      address: customerData.address || '',
+      profession: customerData.profession || '',
+      purpose: customerData.purpose || '',
+      referral_source: customerData.referral_source || customerData.referralSource || '',
+      status: customerData.status || 'Active',
       created_by: user?.id
     };
     
@@ -375,7 +298,7 @@ export const AppProvider = ({ children }) => {
       }
     ]).select();
 
-    const parsedClient = { ...data[0], ...meta, address: customerData.address };
+    const parsedClient = { ...data[0] };
 
     // Update state optimistically
     setCustomers(prev => [parsedClient, ...prev]);
@@ -411,23 +334,23 @@ export const AppProvider = ({ children }) => {
       payload = { ...customerId };
       delete payload.id;
     }
-    const contactValue = payload.contact || payload.whatsapp_number || payload.email || 'No Contact';
-    const meta = {
-      profession: payload.profession,
-      purpose: payload.purpose,
-      referral_source: payload.referral_source || payload.referralSource,
-      joining_date: payload.joining_date || payload.joiningDate,
-      whatsapp_number: payload.whatsapp_number || contactValue
-    };
+    const contactValue = payload.contact || payload.email || 'No Contact';
+    const whatsappValue = payload.whatsapp_number || contactValue;
+    
     const updatePayload = {
       name: payload.name,
       contact: contactValue,
-      address: JSON.stringify({ address: payload.address, ...meta }),
-      status: payload.status
+      contact_number: payload.contact_number || '',
+      whatsapp_number: whatsappValue,
+      address: payload.address || '',
+      profession: payload.profession || '',
+      purpose: payload.purpose || '',
+      referral_source: payload.referral_source || payload.referralSource || '',
+      status: payload.status || 'Active'
     };
     const { data, error } = await supabase.from('clients').update(updatePayload).eq('id', id).select();
     if (!error && data && data.length) {
-      const parsedClient = { ...data[0], ...meta, address: payload.address };
+      const parsedClient = { ...data[0] };
       setCustomers(prev => prev.map(c => c.id === id ? parsedClient : c));
     }
     return { data, error };
@@ -492,20 +415,19 @@ export const AppProvider = ({ children }) => {
 
   const addNewMember = async (data) => {
     console.log("addNewMember entered with data:", data);
-    const contactValue = data.contact || data.whatsapp_number || data.email || 'No Contact';
+    const contactValue = data.contact || data.email || 'No Contact';
+    const whatsappValue = data.whatsapp_number || contactValue;
 
-    // Insert into clients
-    const meta = {
-      profession: data.profession || '',
-      purpose: data.purpose || 'Health',
-      referral_source: data.referral_source || data.referralSource || 'Instagram',
-      joining_date: data.joining_date || data.joiningDate || new Date().toISOString().split('T')[0],
-      whatsapp_number: data.whatsapp_number || contactValue
-    };
     const insertPayload = {
       name: data.name,
       contact: contactValue,
-      address: JSON.stringify({ address: data.address, ...meta }),
+      contact_number: data.contact_number || '',
+      whatsapp_number: whatsappValue,
+      address: data.address || '',
+      profession: data.profession || '',
+      purpose: data.purpose || '',
+      referral_source: data.referral_source || data.referralSource || '',
+      status: data.status || 'Active',
       created_by: user?.id
     };
     
@@ -559,7 +481,7 @@ export const AppProvider = ({ children }) => {
 
     if (memError) throw memError;
 
-    const parsedClient = { ...clientData[0], ...meta, address: data.address };
+    const parsedClient = { ...clientData[0] };
 
     // Optimistically update local state to reflect the newly added client and membership
     const newMembership = {

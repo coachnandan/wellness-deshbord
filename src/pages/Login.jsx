@@ -14,9 +14,14 @@ export default function Login() {
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
-      await login(data);
-      toast.success('Welcome back to the Sanctuary');
-      navigate('/');
+      const resolvedUser = await login(data);
+      const role = resolvedUser?.role || 'member';
+      if (role === 'admin') {
+        toast.success('Welcome back, Admin. Full access granted.');
+      } else {
+        toast.success('Welcome back. Member access granted.');
+      }
+      navigate('/dashboard');
     } catch (error) {
       toast.error(error.message || 'Authentication failed. Please check your credentials.');
     } finally {

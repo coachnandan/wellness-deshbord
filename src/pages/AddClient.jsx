@@ -7,10 +7,16 @@ import {
 } from 'lucide-react';
 
 export default function AddClient() {
+  console.log('AddClient component rendered');
   const { addNewMember, user } = useAppContext();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
 
   const onSubmit = async (data) => {
+    // Auto-copy WhatsApp number from contact number if empty
+    if (!data.whatsapp_number) {
+      data.whatsapp_number = data.contact_number;
+    }
+    console.log('Submitting client data:', data);
     try {
       await addNewMember(data);
       toast.success('New member enrolled successfully!');
@@ -76,35 +82,76 @@ export default function AddClient() {
               </div>
 
               <div className="space-y-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact Person</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <User className="h-4 w-4 text-sage" />
+                  </div>
+                  <input
+                    {...register("contact")}
+                    type="text"
+                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
+                    placeholder="e.g. John Doe"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact Number *</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Phone className="h-4 w-4 text-sage" />
                   </div>
                   <input
-                    {...register("contact", { required: "Contact number is required" })}
+                    {...register("contact_number", { required: "Contact number is required" })}
                     type="tel"
                     className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
                     placeholder="+91 00000 00000"
                   />
                 </div>
-                {errors.contact && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.contact.message}</span>}
+                {errors.contact_number && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.contact_number.message}</span>}
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">WhatsApp Number</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Phone className="h-4 w-4 text-sage" />
+                    </div>
+                    <input
+                      {...register("whatsapp_number")}
+                      type="tel"
+                      className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
+                      placeholder="+91 00000 00000"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2 sm:col-span-2">
                 <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Living Address *</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <div className="absolute top-4 left-4 pointer-events-none">
                     <MapPin className="h-4 w-4 text-sage" />
                   </div>
-                  <input
+                  <textarea
                     {...register("address", { required: "Address is required" })}
-                    type="text"
-                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
+                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30 min-h-[100px]"
                     placeholder="Street, City, State"
                   />
                 </div>
                 {errors.address && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.address.message}</span>}
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Status</label>
+                  <select
+                    {...register("status", { required: "Status is required" })}
+                    className="w-full pl-5 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all appearance-none"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Prospect">Prospect</option>
+                    <option value="Follow-Up">Follow-Up</option>
+                    <option value="Form Submission">Form Submission</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -119,9 +166,13 @@ export default function AddClient() {
                   {...register("purpose")}
                   className="w-full px-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all appearance-none"
                 >
-                  <option value="Health">Personal Health & Wellness</option>
-                  <option value="Business">Entrepreneurial Growth</option>
-                  <option value="Mental">Holistic Mental Clarity</option>
+                  <option value="Weight Loss">Weight Loss</option>
+                  <option value="Weight Gain">Weight Gain</option>
+                  <option value="Health & Vitality">Health & Vitality</option>
+                  <option value="Stress Management">Stress Management</option>
+                  <option value="Yoga">Yoga</option>
+                  <option value="Fitness">Fitness</option>
+                  <option value="General Wellness">General Wellness</option>
                 </select>
               </div>
 
@@ -146,10 +197,13 @@ export default function AddClient() {
                   {...register("referral_source")}
                   className="w-full px-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all appearance-none"
                 >
-                  <option value="Instagram">Instagram Bloom</option>
-                  <option value="Word of Mouth">Kindred Referral</option>
-                  <option value="Website">Global Website</option>
-                  <option value="LinkedIn">Professional Network</option>
+                  <option value="Instagram">Instagram</option>
+                  <option value="Facebook">Facebook</option>
+                  <option value="Website">Website</option>
+                  <option value="Existing Client">Existing Client</option>
+                  <option value="Walk-In">Walk-In</option>
+                  <option value="Google">Google</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
             </div>

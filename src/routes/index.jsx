@@ -45,14 +45,20 @@ const ProtectedRoute = ({ children }) => {
 };
 
 // AdminRoute ensures only admin users can access admin pages
+// Always waits for auth to resolve (authLoading) before checking role
+// so role is never evaluated against an empty/stale user object
 const AdminRoute = ({ children }) => {
-  const { user } = useAppContext();
+  const { user, authLoading } = useAppContext();
+  if (authLoading) {
+    // Auth not yet resolved — wait before making any role decision
+    return <Loader />;
+  }
   if (!user) {
-    // Not logged in, go to role selection
+    // Not logged in — redirect to role selection
     return <Navigate to="/role-selection" replace />;
   }
   if (user.role !== 'admin') {
-    // Authenticated but not admin, show access denied
+    // Authenticated but not admin — show access denied
     return <Navigate to="/access-denied" replace />;
   }
   return children;
