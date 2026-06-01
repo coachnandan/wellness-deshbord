@@ -41,11 +41,13 @@ export default function Customers() {
     if (customer) {
       setEditingCustomer(customer);
       Object.keys(customer).forEach(key => setValue(key, customer[key]));
+      // Map legacy fields to new fields
+      setValue('full_name', customer.full_name || customer.name || '');
+      setValue('mobile_number', customer.mobile_number || customer.contact_number || customer.contact || '');
     } else {
       setEditingCustomer(null);
       reset({
-        status: 'Active',
-        joiningDate: new Date().toISOString().split('T')[0]
+        joining_date: new Date().toISOString().split('T')[0]
       });
     }
     setIsModalOpen(true);
@@ -53,13 +55,15 @@ export default function Customers() {
   };
 
   const onSubmit = async (data) => {
+    // Auto-fill whatsapp from mobile if blank
+    if (!data.whatsapp_number) data.whatsapp_number = data.mobile_number;
     try {
       if (editingCustomer) {
         await updateCustomer(editingCustomer.id, data);
-        toast.success('Client profile updated with care');
+        toast.success('Client profile updated successfully.');
       } else {
         await addCustomer(data);
-        toast.success('New client journey initiated');
+        toast.success('Client Profile Created Successfully.');
       }
       setIsModalOpen(false);
       reset();
@@ -276,45 +280,97 @@ export default function Customers() {
             </div>
             
             <form onSubmit={handleSubmit(onSubmit)} className="p-10 sm:p-12 space-y-8">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Name</label>
-                  <input {...register("name", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Aditi Sharma" />
+              {/* Personal Information */}
+              <div>
+                <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mb-5">Personal Information</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Full Name *</label>
+                    <input {...register("full_name", { required: "Full name is required" })} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Aditi Sharma" />
+                    {errors.full_name && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1 mt-1 block">{errors.full_name.message}</span>}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Mobile Number *</label>
+                    <input {...register("mobile_number", { required: "Mobile number is required" })} type="tel" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="+91 98765 43210" />
+                    {errors.mobile_number && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1 mt-1 block">{errors.mobile_number.message}</span>}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">WhatsApp Number</label>
+                    <input {...register("whatsapp_number")} type="tel" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="Same as mobile if blank" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Email ID</label>
+                    <input {...register("email")} type="email" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. client@example.com" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Date of Birth</label>
+                    <input {...register("dob")} type="date" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Gender</label>
+                    <select {...register("gender")} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
+                      <option value="">Select Gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Marital Status</label>
+                    <select {...register("marital_status")} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
+                      <option value="">Select Status</option>
+                      <option value="Single">Single</option>
+                      <option value="Married">Married</option>
+                      <option value="Divorced">Divorced</option>
+                      <option value="Widowed">Widowed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Profession</label>
+                    <input {...register("profession")} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Architect" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Address</label>
+                    <textarea {...register("address")} rows={2} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20 resize-none" placeholder="Street, City, State" />
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact (Email/Phone)</label>
-                  <input {...register("contact")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="coach@anandam.in" />
-                </div>
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact Number</label>
-                  <input {...register("contact_number")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="+91 98765 43210" />
-                </div>
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">WhatsApp</label>
-                  <input {...register("whatsapp_number")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="Same as contact if blank" />
-                </div>
-                <div className="space-y-3 sm:col-span-2">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Address</label>
-                  <input {...register("address", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="Street, City, State" />
-                </div>
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Profession</label>
-                  <input {...register("profession")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Architect" />
-                </div>
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Purpose</label>
-                  <input {...register("purpose")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Health & Vitality" />
-                </div>
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referral Source</label>
-                  <input {...register("referral_source")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. Instagram" />
-                </div>
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Status</label>
-                  <select {...register("status")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
+              </div>
+
+              {/* Membership Information */}
+              <div className="border-t border-beige pt-6">
+                <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mb-5">Membership Information</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Joining Date</label>
+                    <input {...register("joining_date")} type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Purpose / Wellness Goal</label>
+                    <select {...register("purpose")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
+                      <option value="">Select Purpose</option>
+                      <option value="Weight Loss">Weight Loss</option>
+                      <option value="Weight Gain">Weight Gain</option>
+                      <option value="Yoga">Yoga</option>
+                      <option value="Meditation">Meditation</option>
+                      <option value="Fitness">Fitness</option>
+                      <option value="Health & Vitality">Health &amp; Vitality</option>
+                      <option value="Stress Management">Stress Management</option>
+                      <option value="General Wellness">General Wellness</option>
+                    </select>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Member Type *</label>
+                    <select {...register("member_type", { required: "Member type is required" })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
+                      <option value="">Select Member Type</option>
+                      <option value="Coach">Coach</option>
+                      <option value="Member">Member</option>
+                    </select>
+                    {errors.member_type && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.member_type.message}</span>}
+                  </div>
+                  <div className="space-y-3">
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referred By</label>
+                    <input {...register("referred_by")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="Name or Source" />
+                  </div>
                 </div>
               </div>
 

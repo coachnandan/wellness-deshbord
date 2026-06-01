@@ -12,14 +12,14 @@ export default function AddClient() {
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
 
   const onSubmit = async (data) => {
-    // Auto-copy WhatsApp number from contact number if empty
+    // Auto-copy WhatsApp number from mobile number if empty
     if (!data.whatsapp_number) {
-      data.whatsapp_number = data.contact_number;
+      data.whatsapp_number = data.mobile_number;
     }
     console.log('Submitting client data:', data);
     try {
       await addNewMember(data);
-      toast.success('New member enrolled successfully!');
+      toast.success('Client Profile Created Successfully.');
       reset();
     } catch (error) {
       console.error('Enrollment failed:', error);
@@ -63,116 +63,108 @@ export default function AddClient() {
         <form onSubmit={handleSubmit(onSubmit)} className="p-10 space-y-8">
           {/* Personal Details */}
           <div>
-            <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mb-5">Personal Details</p>
+            <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mb-5">Personal Information</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Full Legal Name *</label>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Full Name *</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <User className="h-4 w-4 text-sage" />
                   </div>
                   <input
-                    {...register("name", { required: "Full name is required" })}
+                    {...register("full_name", { required: "Full name is required" })}
                     type="text"
                     className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
                     placeholder="e.g. Rahul Sharma"
                   />
                 </div>
-                {errors.name && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.name.message}</span>}
+                {errors.full_name && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.full_name.message}</span>}
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact Person</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User className="h-4 w-4 text-sage" />
-                  </div>
-                  <input
-                    {...register("contact")}
-                    type="text"
-                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
-                    placeholder="e.g. John Doe"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact Number *</label>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Mobile Number *</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Phone className="h-4 w-4 text-sage" />
                   </div>
                   <input
-                    {...register("contact_number", { required: "Contact number is required" })}
+                    {...register("mobile_number", { required: "Mobile number is required" })}
                     type="tel"
                     className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
                     placeholder="+91 00000 00000"
                   />
                 </div>
-                {errors.contact_number && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.contact_number.message}</span>}
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">WhatsApp Number</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Phone className="h-4 w-4 text-sage" />
-                    </div>
-                    <input
-                      {...register("whatsapp_number")}
-                      type="tel"
-                      className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
-                      placeholder="+91 00000 00000"
-                    />
-                  </div>
-                </div>
+                {errors.mobile_number && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.mobile_number.message}</span>}
               </div>
 
-              <div className="space-y-2 sm:col-span-2">
-                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Living Address *</label>
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">WhatsApp Number</label>
                 <div className="relative">
-                  <div className="absolute top-4 left-4 pointer-events-none">
-                    <MapPin className="h-4 w-4 text-sage" />
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Phone className="h-4 w-4 text-sage" />
                   </div>
-                  <textarea
-                    {...register("address", { required: "Address is required" })}
-                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30 min-h-[100px]"
-                    placeholder="Street, City, State"
+                  <input
+                    {...register("whatsapp_number")}
+                    type="tel"
+                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
+                    placeholder="+91 00000 00000"
                   />
                 </div>
-                {errors.address && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.address.message}</span>}
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Status</label>
-                  <select
-                    {...register("status", { required: "Status is required" })}
-                    className="w-full pl-5 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all appearance-none"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                    <option value="Prospect">Prospect</option>
-                    <option value="Follow-Up">Follow-Up</option>
-                    <option value="Form Submission">Form Submission</option>
-                  </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Email ID</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Globe className="h-4 w-4 text-sage" />
+                  </div>
+                  <input
+                    {...register("email")}
+                    type="email"
+                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
+                    placeholder="e.g. client@example.com"
+                  />
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Wellness Profile */}
-          <div className="border-t border-beige pt-8">
-            <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mb-5">Wellness Profile</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Primary Goal</label>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Date of Birth</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Tag className="h-4 w-4 text-sage" />
+                  </div>
+                  <input
+                    {...register("dob")}
+                    type="date"
+                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Gender</label>
                 <select
-                  {...register("purpose")}
+                  {...register("gender")}
                   className="w-full px-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all appearance-none"
                 >
-                  <option value="Weight Loss">Weight Loss</option>
-                  <option value="Weight Gain">Weight Gain</option>
-                  <option value="Health & Vitality">Health & Vitality</option>
-                  <option value="Stress Management">Stress Management</option>
-                  <option value="Yoga">Yoga</option>
-                  <option value="Fitness">Fitness</option>
-                  <option value="General Wellness">General Wellness</option>
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Marital Status</label>
+                <select
+                  {...register("marital_status")}
+                  className="w-full px-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all appearance-none"
+                >
+                  <option value="">Select Status</option>
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Divorced">Divorced</option>
+                  <option value="Widowed">Widowed</option>
                 </select>
               </div>
 
@@ -191,20 +183,85 @@ export default function AddClient() {
                 </div>
               </div>
 
+              <div className="space-y-2 sm:col-span-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Address</label>
+                <div className="relative">
+                  <div className="absolute top-4 left-4 pointer-events-none">
+                    <MapPin className="h-4 w-4 text-sage" />
+                  </div>
+                  <textarea
+                    {...register("address")}
+                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30 min-h-[100px]"
+                    placeholder="Street, City, State"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Membership Information */}
+          <div className="border-t border-beige pt-8">
+            <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mb-5">Membership Information</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referral Channel</label>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Joining Date</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Tag className="h-4 w-4 text-sage" />
+                  </div>
+                  <input
+                    {...register("joining_date")}
+                    type="date"
+                    defaultValue={new Date().toISOString().split('T')[0]}
+                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Purpose / Wellness Goal</label>
                 <select
-                  {...register("referral_source")}
+                  {...register("purpose")}
                   className="w-full px-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all appearance-none"
                 >
-                  <option value="Instagram">Instagram</option>
-                  <option value="Facebook">Facebook</option>
-                  <option value="Website">Website</option>
-                  <option value="Existing Client">Existing Client</option>
-                  <option value="Walk-In">Walk-In</option>
-                  <option value="Google">Google</option>
-                  <option value="Other">Other</option>
+                  <option value="">Select Purpose</option>
+                  <option value="Weight Loss">Weight Loss</option>
+                  <option value="Weight Gain">Weight Gain</option>
+                  <option value="Yoga">Yoga</option>
+                  <option value="Meditation">Meditation</option>
+                  <option value="Fitness">Fitness</option>
+                  <option value="Health & Vitality">Health & Vitality</option>
+                  <option value="Stress Management">Stress Management</option>
+                  <option value="General Wellness">General Wellness</option>
                 </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Member Type *</label>
+                <select
+                  {...register("member_type", { required: "Member type is required" })}
+                  className="w-full px-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all appearance-none"
+                >
+                  <option value="">Select Member Type</option>
+                  <option value="Coach">Coach</option>
+                  <option value="Member">Member</option>
+                </select>
+                {errors.member_type && <span className="text-red-400 text-[10px] font-black uppercase tracking-widest px-1">{errors.member_type.message}</span>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referred By</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <User className="h-4 w-4 text-sage" />
+                  </div>
+                  <input
+                    {...register("referred_by")}
+                    type="text"
+                    className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
+                    placeholder="Name or Source"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -259,7 +316,7 @@ export default function AddClient() {
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4 mr-2 text-gold" />
-                  Complete Enrollment
+                  Establish Profile
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </>
               )}

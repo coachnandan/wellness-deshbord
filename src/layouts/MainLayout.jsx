@@ -194,13 +194,13 @@ export default function MainLayout() {
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   return (
-    <div className="min-h-screen bg-offwhite selection:bg-forest/10 selection:text-forest">
+    <div className="h-screen bg-offwhite selection:bg-forest/10 selection:text-forest overflow-hidden">
       <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       
-      <div className="lg:ml-64 flex flex-col min-h-screen transition-all duration-500">
+      <div className="lg:ml-64 flex flex-col h-screen transition-all duration-500">
         <Header toggleSidebar={toggleSidebar} />
         
-        <main className="flex-1 p-6 sm:p-10 pb-32 lg:pb-12 overflow-x-hidden relative">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 sm:p-10 pb-40 lg:pb-12 relative">
           <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10">
             <Outlet />
           </div>

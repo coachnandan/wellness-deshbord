@@ -20,9 +20,23 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Clients table
 CREATE TABLE IF NOT EXISTS public.clients (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT NOT NULL,
-  contact TEXT NOT NULL,
-  address JSONB DEFAULT '{}'::jsonb,
+  -- New fields
+  full_name TEXT NOT NULL,
+  mobile_number TEXT NOT NULL,
+  whatsapp_number TEXT,
+  email TEXT,
+  address TEXT,
+  profession TEXT,
+  dob DATE,
+  gender TEXT CHECK (gender IN ('Male', 'Female', 'Other')),
+  marital_status TEXT CHECK (marital_status IN ('Single', 'Married', 'Divorced', 'Widowed')),
+  joining_date DATE DEFAULT CURRENT_DATE,
+  purpose TEXT,
+  member_type TEXT CHECK (member_type IN ('Coach', 'Member')),
+  referred_by TEXT,
+  -- Legacy fields (for backward compatibility)
+  name TEXT,
+  contact TEXT,
   status TEXT DEFAULT 'Active',
   created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()

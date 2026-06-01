@@ -247,19 +247,25 @@ export const AppProvider = ({ children }) => {
   };
 
   const addCustomer = async (customerData) => {
-    const contactValue = customerData.contact || customerData.email || 'No Contact';
-    const whatsappValue = customerData.whatsapp_number || contactValue;
-    
     const insertPayload = {
-      name: customerData.name,
-      contact: contactValue,
-      contact_number: customerData.contact_number || '',
-      whatsapp_number: whatsappValue,
-      address: customerData.address || '',
-      profession: customerData.profession || '',
-      purpose: customerData.purpose || '',
-      referral_source: customerData.referral_source || customerData.referralSource || '',
-      status: customerData.status || 'Active',
+      // New schema fields
+      full_name: customerData.full_name,
+      mobile_number: customerData.mobile_number,
+      whatsapp_number: customerData.whatsapp_number || customerData.mobile_number,
+      email: customerData.email || null,
+      address: customerData.address || null,
+      profession: customerData.profession || null,
+      dob: customerData.dob || null,
+      gender: customerData.gender || null,
+      marital_status: customerData.marital_status || null,
+      joining_date: customerData.joining_date || new Date().toISOString().split('T')[0],
+      purpose: customerData.purpose || null,
+      member_type: customerData.member_type || null,
+      referred_by: customerData.referred_by || null,
+      // Legacy fields (keep for backward compatibility)
+      name: customerData.full_name,
+      contact: customerData.mobile_number,
+      status: 'Active',
       created_by: user?.id
     };
     
@@ -338,14 +344,23 @@ export const AppProvider = ({ children }) => {
     const whatsappValue = payload.whatsapp_number || contactValue;
     
     const updatePayload = {
-      name: payload.name,
-      contact: contactValue,
-      contact_number: payload.contact_number || '',
-      whatsapp_number: whatsappValue,
-      address: payload.address || '',
-      profession: payload.profession || '',
-      purpose: payload.purpose || '',
-      referral_source: payload.referral_source || payload.referralSource || '',
+      // New schema fields
+      full_name: payload.full_name || payload.name,
+      mobile_number: payload.mobile_number || payload.contact_number || payload.contact,
+      whatsapp_number: payload.whatsapp_number || payload.mobile_number || payload.contact_number || payload.contact,
+      email: payload.email || null,
+      address: payload.address || null,
+      profession: payload.profession || null,
+      dob: payload.dob || null,
+      gender: payload.gender || null,
+      marital_status: payload.marital_status || null,
+      joining_date: payload.joining_date || null,
+      purpose: payload.purpose || null,
+      member_type: payload.member_type || null,
+      referred_by: payload.referred_by || null,
+      // Legacy fields
+      name: payload.full_name || payload.name,
+      contact: payload.mobile_number || payload.contact_number || payload.contact,
       status: payload.status || 'Active'
     };
     const { data, error } = await supabase.from('clients').update(updatePayload).eq('id', id).select();
@@ -415,19 +430,27 @@ export const AppProvider = ({ children }) => {
 
   const addNewMember = async (data) => {
     console.log("addNewMember entered with data:", data);
-    const contactValue = data.contact || data.email || 'No Contact';
-    const whatsappValue = data.whatsapp_number || contactValue;
 
     const insertPayload = {
-      name: data.name,
-      contact: contactValue,
-      contact_number: data.contact_number || '',
-      whatsapp_number: whatsappValue,
-      address: data.address || '',
-      profession: data.profession || '',
-      purpose: data.purpose || '',
-      referral_source: data.referral_source || data.referralSource || '',
-      status: data.status || 'Active',
+      // New schema fields
+      full_name: data.full_name,
+      mobile_number: data.mobile_number,
+      whatsapp_number: data.whatsapp_number || data.mobile_number,
+      email: data.email || null,
+      address: data.address || null,
+      profession: data.profession || null,
+      dob: data.dob || null,
+      gender: data.gender || null,
+      marital_status: data.marital_status || null,
+      joining_date: data.joining_date,
+      purpose: data.purpose || null,
+      member_type: data.member_type,
+      referred_by: data.referred_by || null,
+
+      // Legacy fields
+      name: data.full_name,
+      contact: data.mobile_number,
+      status: 'Active',
       created_by: user?.id
     };
     
