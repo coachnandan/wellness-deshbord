@@ -57,6 +57,7 @@ export default function Customers() {
   const onSubmit = async (data) => {
     // Auto-fill whatsapp from mobile if blank
     if (!data.whatsapp_number) data.whatsapp_number = data.mobile_number;
+    console.log('Submitting data:', data);
     try {
       if (editingCustomer) {
         await updateCustomer(editingCustomer.id, data);
@@ -68,7 +69,8 @@ export default function Customers() {
       setIsModalOpen(false);
       reset();
     } catch (error) {
-      toast.error('Operation failed. Please verify the client data.');
+      console.error('Operation failed:', error);
+      toast.error(`Error: ${error.message || 'Operation failed. Please check the data.'}`);
     }
   };
 
