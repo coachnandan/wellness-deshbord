@@ -52,6 +52,7 @@ export default function Customers() {
     }
     setIsModalOpen(true);
     setActiveDropdown(null);
+    window.scrollTo(0, 0);
   };
 
   const onSubmit = async (data) => {
@@ -267,11 +268,11 @@ export default function Customers() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-50 flex items-center justify-center p-6 overflow-y-auto no-scrollbar">
-          <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-2xl border border-white/20 animate-in zoom-in-95 duration-500 my-8">
-            <div className="px-10 py-10 border-b border-beige flex items-center justify-between bg-offwhite/50">
+        <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto no-scrollbar">
+          <div className="bg-white rounded-3xl sm:rounded-[3rem] shadow-2xl w-full max-w-2xl border border-white/20 animate-in zoom-in-95 duration-500 my-4 sm:my-8">
+            <div className="px-6 py-6 sm:px-10 sm:py-10 border-b border-beige flex items-center justify-between bg-offwhite/50">
               <div>
-                <h2 className="text-3xl font-extrabold text-forest tracking-tight">
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-forest tracking-tight">
                   {editingCustomer ? 'Update Profile' : 'New Client Profile'}
                 </h2>
                 <p className="text-sm font-medium text-muted mt-1">Refine the professional details of your client.</p>
@@ -281,7 +282,7 @@ export default function Customers() {
               </button>
             </div>
             
-            <form onSubmit={handleSubmit(onSubmit)} className="p-10 sm:p-12 space-y-8">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 sm:p-10 md:p-12 space-y-6 sm:space-y-8">
               {/* Personal Information */}
               <div>
                 <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mb-5">Personal Information</p>
