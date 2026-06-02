@@ -61,8 +61,12 @@ LIMIT 20 OFFSET 0;
 
 -- =============================================================================
 -- 3. SELECT SINGLE MEMBER BY ID
+-- Replace with actual UUID from your database
 -- =============================================================================
-SELECT * FROM members WHERE id = 'UUID_HERE' AND is_active = TRUE;
+-- SELECT * FROM members WHERE id = '550e8400-e29b-41d4-a716-446655440000' AND is_active = TRUE;
+
+-- Get all member IDs first:
+SELECT id, member_id, full_name FROM members WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 10;
 
 -- =============================================================================
 -- 4. SELECT MEMBER BY MEMBER_ID
@@ -71,35 +75,38 @@ SELECT * FROM members WHERE member_id = 'ANM-2026-00001' AND is_active = TRUE;
 
 -- =============================================================================
 -- 5. UPDATE MEMBER
+-- Replace '550e8400-e29b-41d4-a716-446655440000' with actual member ID
 -- =============================================================================
-UPDATE members SET
-    full_name = 'Rahul Sharma Updated',
-    mobile_number = '9876543211',
-    whatsapp_number = '9876543211',
-    email = 'rahul.updated@gmail.com',
-    dob = '1995-06-15',
-    gender = 'Male',
-    marital_status = 'Married',
-    address = '456 Park Street, Jaipur, Rajasthan 302002',
-    purpose = ARRAY['Yoga', 'Meditation', 'General Wellness'],
-    member_type = 'Member',
-    referral = 'Yes',
-    referred_by = 'Coach Aditi'
-WHERE id = 'UUID_HERE'
-RETURNING id, member_id, full_name, updated_at;
+-- UPDATE members SET
+--     full_name = 'Rahul Sharma Updated',
+--     mobile_number = '9876543211',
+--     whatsapp_number = '9876543211',
+--     email = 'rahul.updated@gmail.com',
+--     dob = '1995-06-15',
+--     gender = 'Male',
+--     marital_status = 'Married',
+--     address = '456 Park Street, Jaipur, Rajasthan 302002',
+--     purpose = ARRAY['Yoga', 'Meditation', 'General Wellness'],
+--     member_type = 'Member',
+--     referral = 'Yes',
+--     referred_by = 'Coach Aditi'
+-- WHERE id = '550e8400-e29b-41d4-a716-446655440000'
+-- RETURNING id, member_id, full_name, updated_at;
 
 -- =============================================================================
 -- 6. SOFT DELETE (ARCHIVE) MEMBER
+-- Replace with actual UUID
 -- =============================================================================
-UPDATE members SET is_active = FALSE WHERE id = 'UUID_HERE';
+-- UPDATE members SET is_active = FALSE WHERE id = '550e8400-e29b-41d4-a716-446655440000';
 
 -- Or use the helper function:
-SELECT archive_member('UUID_HERE');
+-- SELECT archive_member('550e8400-e29b-41d4-a716-446655440000');
 
 -- =============================================================================
 -- 7. RESTORE ARCHIVED MEMBER
+-- Replace with actual UUID
 -- =============================================================================
-SELECT restore_member('UUID_HERE');
+-- SELECT restore_member('550e8400-e29b-41d4-a716-446655440000');
 
 -- =============================================================================
 -- 8. SEARCH MEMBERS (by name, mobile, or member_id)
