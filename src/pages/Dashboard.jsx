@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Users,
   CalendarCheck,
@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
+import ClientEditModal from '../components/ClientEditModal';
 
 const KPICard = ({ title, value, icon: Icon, trend, trendValue, accentColor }) => (
   <div className="luxury-card p-6 sm:p-8 flex flex-col justify-between h-full">
@@ -37,6 +38,7 @@ const KPICard = ({ title, value, icon: Icon, trend, trendValue, accentColor }) =
 
 export default function Dashboard() {
   const { customers = [], attendance = [], memberships = [], dataLoading } = useAppContext();
+  const [editingCustomer, setEditingCustomer] = useState(null);
 
   // Basic aggregations
   const totalCustomers = customers.length;
@@ -227,7 +229,12 @@ export default function Dashboard() {
                       {customer?.name?.charAt(0) || '?'}
                     </div>
                     <div>
-                      <p className="text-base font-extrabold text-forest">{customer?.name || 'Unknown'}</p>
+                      <p 
+                        onClick={() => customer && setEditingCustomer(customer)}
+                        className="text-base font-extrabold text-forest cursor-pointer hover:text-sage transition-colors"
+                      >
+                        {customer?.name || 'Unknown'}
+                      </p>
                       <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em] mt-1">{customer?.address?.split(',')[0] || 'Unknown Location'}</p>
                     </div>
                   </div>
@@ -275,7 +282,12 @@ export default function Dashboard() {
                         <Clock size={20} />
                       </div>
                       <div>
-                        <p className="text-base font-extrabold text-forest">{customer?.name || 'Unknown'}</p>
+                        <p 
+                          onClick={() => customer && setEditingCustomer(customer)}
+                          className="text-base font-extrabold text-forest cursor-pointer hover:text-sage transition-colors"
+                        >
+                          {customer?.name || 'Unknown'}
+                        </p>
                         <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em] mt-1">Expiring: {new Date(membership.expiryDate || membership.expiry_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                       </div>
                     </div>
@@ -300,6 +312,14 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Client Edit Modal */}
+      {editingCustomer && (
+        <ClientEditModal 
+          customer={editingCustomer} 
+          onClose={() => setEditingCustomer(null)} 
+        />
+      )}
     </div>
   );
 }

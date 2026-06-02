@@ -21,11 +21,13 @@ import {
 } from 'recharts';
 import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
+import ClientEditModal from '../components/ClientEditModal';
 
 export default function Attendance() {
   const { attendance = [], customers = [], memberships = [], updateAttendance } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
+  const [editingCustomer, setEditingCustomer] = useState(null);
   
   const todayStr = new Date().toISOString().split('T')[0];
   const todayAttendance = attendance.filter(a => a.date === todayStr);
@@ -215,7 +217,12 @@ export default function Attendance() {
                            {client?.name?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p className="font-extrabold text-forest text-base leading-tight">{client?.name || 'Unknown'}</p>
+                          <p 
+                            onClick={() => client && setEditingCustomer(client)}
+                            className="font-extrabold text-forest text-base leading-tight cursor-pointer hover:text-sage transition-colors"
+                          >
+                            {client?.name || 'Unknown'}
+                          </p>
                           <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{client?.contact || 'No Contact'}</p>
                         </div>
                       </div>
@@ -295,6 +302,14 @@ export default function Attendance() {
            </div>
         </div>
       </div>
+
+      {/* Client Edit Modal */}
+      {editingCustomer && (
+        <ClientEditModal 
+          customer={editingCustomer} 
+          onClose={() => setEditingCustomer(null)} 
+        />
+      )}
     </div>
   );
 }

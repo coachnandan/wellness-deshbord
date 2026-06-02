@@ -4,6 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabaseClient';
+import ClientEditModal from '../components/ClientEditModal';
 
 export default function Memberships() {
   const { memberships, customers, addMembership, addNewMember, renewMembership, user, sendWhatsAppAlert } = useAppContext();
@@ -19,6 +20,7 @@ export default function Memberships() {
   const [renewalLogs, setRenewalLogs] = useState([]);
   const [memberAttendance, setMemberAttendance] = useState([]);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(null);
 
   const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-IN');
 
@@ -222,7 +224,15 @@ export default function Memberships() {
                            {customer?.name?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p className="font-extrabold text-forest text-base leading-tight">{customer?.name || 'Unknown'}</p>
+                          <p 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (customer) setEditingCustomer(customer);
+                            }}
+                            className="font-extrabold text-forest text-base leading-tight cursor-pointer hover:text-sage transition-colors"
+                          >
+                            {customer?.name || 'Unknown'}
+                          </p>
                           <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{customer?.id || 'NO_ID'}</p>
                         </div>
                       </div>
@@ -693,6 +703,14 @@ export default function Memberships() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Client Edit Modal */}
+      {editingCustomer && (
+        <ClientEditModal 
+          customer={editingCustomer} 
+          onClose={() => setEditingCustomer(null)} 
+        />
       )}
     </div>
   );

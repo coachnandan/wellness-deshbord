@@ -186,7 +186,12 @@ export default function Customers() {
                           {customer?.name?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p className="font-extrabold text-forest text-base leading-tight">{customer?.name || 'Unknown'}</p>
+                          <p 
+                            onClick={() => handleOpenModal(customer)}
+                            className="font-extrabold text-forest text-base leading-tight cursor-pointer hover:text-sage transition-colors"
+                          >
+                            {customer?.name || 'Unknown'}
+                          </p>
                           <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1.5">{customer?.id || 'NO_ID'}</p>
                         </div>
                       </div>
