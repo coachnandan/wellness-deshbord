@@ -155,7 +155,7 @@ export const AppProvider = ({ children }) => {
     try {
       setDataLoading(true);
       const today = new Date().toISOString().split('T')[0];
-      const { data: clientData } = await supabase.from('clients').select('*');
+      const { data: clientData } = await supabase.from('clients').select('*').order('full_name', { ascending: true });
       if (clientData) {
         const parsedClients = clientData.map(c => {
           try {
