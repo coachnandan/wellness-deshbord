@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
@@ -7,6 +7,10 @@ import {
 } from 'lucide-react';
 
 export default function AddClient() {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   console.log('AddClient component rendered');
   const { addNewMember, user } = useAppContext();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();

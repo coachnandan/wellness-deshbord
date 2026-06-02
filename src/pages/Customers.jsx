@@ -268,7 +268,7 @@ export default function Customers() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-50 flex items-center justify-center p-6 overflow-y-auto no-scrollbar">
-          <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-white/20 animate-in zoom-in-95 duration-500">
+          <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-2xl border border-white/20 animate-in zoom-in-95 duration-500 my-8">
             <div className="px-10 py-10 border-b border-beige flex items-center justify-between bg-offwhite/50">
               <div>
                 <h2 className="text-3xl font-extrabold text-forest tracking-tight">

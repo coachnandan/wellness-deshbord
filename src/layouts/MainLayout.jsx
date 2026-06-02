@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -190,8 +190,16 @@ const MobileNav = () => {
 
 export default function MainLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const mainRef = useRef(null);
+  const location = useLocation();
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTo(0, 0);
+    }
+  }, [location.pathname]);
 
   return (
     <div className="h-screen bg-offwhite selection:bg-forest/10 selection:text-forest overflow-hidden">
@@ -200,7 +208,7 @@ export default function MainLayout() {
       <div className="lg:ml-64 flex flex-col h-screen transition-all duration-500">
         <Header toggleSidebar={toggleSidebar} />
         
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 sm:p-10 pb-40 lg:pb-12 relative">
+        <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-6 sm:p-10 pb-40 lg:pb-12 relative">
           <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10">
             <Outlet />
           </div>
