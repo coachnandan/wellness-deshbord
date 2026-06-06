@@ -5,6 +5,7 @@ import {
   Users, 
   CalendarCheck, 
   CreditCard, 
+  UserPlus,
   LogOut, 
   Menu,
   X,
@@ -20,14 +21,15 @@ import ProfilePopup from '../components/ProfilePopup';
 
 const adminNavItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Clients', path: '/clients', icon: Users },
+  { name: 'Members', path: '/clients', icon: Users },
   { name: 'Attendance', path: '/attendance', icon: CalendarCheck },
   { name: 'Memberships', path: '/memberships', icon: CreditCard },
+  { name: 'Visitor', path: '/visitor', icon: UserPlus },
 ];
 
 const memberNavItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Clients', path: '/clients', icon: Users },
+  { name: 'Members', path: '/clients', icon: Users },
 ];
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {

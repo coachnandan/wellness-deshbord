@@ -23,7 +23,7 @@ export default function AddClient() {
     console.log('Submitting client data:', data);
     try {
       await addNewMember(data);
-      toast.success('Client Profile Created Successfully.');
+      toast.success('Member Profile Created Successfully.');
       reset();
     } catch (error) {
       console.error('Enrollment failed:', error);
@@ -41,7 +41,7 @@ export default function AddClient() {
           </div>
           <div>
             <h1 className="text-4xl font-extrabold text-forest tracking-tight">Enroll New Member</h1>
-            <p className="text-muted font-medium text-sm mt-0.5">Begin a new client's wellness transformation journey.</p>
+            <p className="text-muted font-medium text-sm mt-0.5">Begin a new member's wellness transformation journey.</p>
           </div>
         </div>
         <div className="flex items-center space-x-2 mt-2">
@@ -57,7 +57,7 @@ export default function AddClient() {
         <div className="px-10 py-8 border-b border-beige bg-offwhite/50 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-extrabold text-forest tracking-tight">Wellness Enrollment Form</h2>
-            <p className="text-sm font-medium text-muted mt-0.5">Fill in the client's details to register them.</p>
+            <p className="text-sm font-medium text-muted mt-0.5">Fill in the member's details to register them.</p>
           </div>
           <div className="w-12 h-12 bg-forest/5 rounded-2xl flex items-center justify-center border border-beige">
             <User className="w-5 h-5 text-sage" />
@@ -126,7 +126,7 @@ export default function AddClient() {
                     {...register("email")}
                     type="email"
                     className="w-full pl-12 pr-5 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/50 transition-all placeholder-muted/30"
-                    placeholder="e.g. client@example.com"
+                    placeholder="e.g. member@example.com"
                   />
                 </div>
               </div>

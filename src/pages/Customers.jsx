@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Plus, Search, Filter, MoreVertical, X, Edit3, Trash2, ChevronLeft, ChevronRight, User as UserIcon, Phone, MapPin, Briefcase, Activity } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, X, Edit3, Trash2, ChevronLeft, ChevronRight, User as UserIcon, Phone, MapPin, Briefcase, Activity, CreditCard } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
 
 export default function Customers() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer, dataLoading } = useAppContext();
-  
+  const { customers, addCustomer, updateCustomer, deleteCustomer, dataLoading, addMembership } = useAppContext();
+
   // States
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMembershipModalOpen, setIsMembershipModalOpen] = useState(false);
+  const [membershipFormState, setMembershipFormState] = useState({
+    startDate: new Date().toISOString().split('T')[0],
+    plan: '10 Days',
+    amount: 2500,
+    amountType: 'Default'
+  });
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
 
@@ -22,10 +29,10 @@ export default function Customers() {
 
   // Filter and search logic
   const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = 
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.contact.includes(searchTerm);
+    const matchesSearch =
+      (customer.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (customer.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (customer.contact || '').includes(searchTerm);
     const matchesStatus = filterStatus === 'All' || customer.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -36,6 +43,41 @@ export default function Customers() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  const handleOpenMembershipModal = (customer) => {
+    setEditingCustomer(customer);
+    setMembershipFormState({
+      startDate: new Date().toISOString().split('T')[0],
+      plan: '10 Days',
+      amount: 2500,
+      amountType: 'Default'
+    });
+    setIsMembershipModalOpen(true);
+    setActiveDropdown(null);
+  };
+
+  const handleMembershipSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const duration = membershipFormState.plan === '3 Days' ? 3 
+        : membershipFormState.plan === '10 Days' ? 10 
+        : 30;
+        
+      await addMembership({
+        customerId: editingCustomer.id,
+        customerName: editingCustomer.name,
+        plan: membershipFormState.plan,
+        durationDays: duration,
+        amount: membershipFormState.amount,
+        startDate: membershipFormState.startDate
+      });
+      toast.success('Membership created successfully.');
+      setIsMembershipModalOpen(false);
+    } catch (error) {
+      console.error('Membership failed:', error);
+      toast.error('Failed to create membership.');
+    }
+  };
 
   const handleOpenModal = (customer = null) => {
     if (customer) {
@@ -62,10 +104,10 @@ export default function Customers() {
     try {
       if (editingCustomer) {
         await updateCustomer(editingCustomer.id, data);
-        toast.success('Client profile updated successfully.');
+        toast.success('Member profile updated successfully.');
       } else {
         await addCustomer(data);
-        toast.success('Client Profile Created Successfully.');
+        toast.success('Member Profile Created Successfully.');
       }
       setIsModalOpen(false);
       reset();
@@ -76,9 +118,9 @@ export default function Customers() {
   };
 
   const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to archive this client profile?')) {
+    if (window.confirm('Are you sure you want to archive this member profile?')) {
       deleteCustomer(id);
-      toast.info('Client profile has been archived');
+      toast.info('Member profile has been archived');
       setActiveDropdown(null);
     }
   };
@@ -87,10 +129,10 @@ export default function Customers() {
     <div className="space-y-12">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
         <div>
-          <h1 className="text-4xl font-extrabold text-forest tracking-tight">Client Directory</h1>
-          <p className="text-muted mt-2 font-medium">Manage and nurture your professional client relationships.</p>
+          <h1 className="text-4xl font-extrabold text-forest tracking-tight">Member Directory</h1>
+          <p className="text-muted mt-2 font-medium">Manage and nurture your professional member relationships.</p>
         </div>
-        <button 
+        <button
           onClick={() => handleOpenModal()}
           className="w-full lg:w-auto flex items-center justify-center px-8 py-4 bg-forest text-white rounded-2xl font-black uppercase tracking-[0.15em] text-[10px] hover:bg-forest-hover transition-all shadow-xl shadow-forest/20 active:scale-95"
         >
@@ -103,9 +145,9 @@ export default function Customers() {
         <div className="p-8 sm:p-10 border-b border-beige flex flex-col sm:flex-row gap-6 items-center bg-offwhite/30">
           <div className="relative flex-1 w-full">
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-muted/40" size={20} />
-            <input 
-              type="text" 
-              placeholder="Search by name, ID or phone..." 
+            <input
+              type="text"
+              placeholder="Search by name, ID or phone..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               className="w-full pl-14 pr-6 py-4 bg-white border border-beige rounded-2xl text-forest font-bold text-sm placeholder-muted/30 focus:ring-4 focus:ring-sage/10 transition-all outline-none"
@@ -114,7 +156,7 @@ export default function Customers() {
           <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className="relative w-full sm:w-48">
               <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-sage" size={16} />
-              <select 
+              <select
                 value={filterStatus}
                 onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-11 pr-4 py-4 bg-white border border-beige rounded-2xl text-forest font-black uppercase tracking-widest text-[10px] outline-none appearance-none cursor-pointer focus:ring-4 focus:ring-sage/10 transition-all"
@@ -126,12 +168,12 @@ export default function Customers() {
             </div>
           </div>
         </div>
-        
+
         <div className="overflow-x-auto no-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-offwhite/50 text-muted text-[10px] font-black uppercase tracking-[0.2em] border-b border-beige">
-                <th className="px-10 py-6">Client Profile</th>
+                <th className="px-10 py-6">Member Profile</th>
                 <th className="px-10 py-6 hidden md:table-cell">Contact & Location</th>
                 <th className="px-10 py-6 hidden lg:table-cell">Professional Focus</th>
                 <th className="px-10 py-6">Status</th>
@@ -174,7 +216,7 @@ export default function Customers() {
               ) : currentCustomers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-10 py-16 text-center text-muted font-medium">
-                    No clients found.
+                    No members found.
                   </td>
                 </tr>
               ) : (
@@ -186,7 +228,7 @@ export default function Customers() {
                           {customer?.name?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p 
+                          <p
                             onClick={() => handleOpenModal(customer)}
                             className="font-extrabold text-forest text-base leading-tight cursor-pointer hover:text-sage transition-colors"
                           >
@@ -209,14 +251,13 @@ export default function Customers() {
                       </div>
                     </td>
                     <td className="px-10 py-8">
-                      <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border ${
-                        customer.status === 'Active' ? 'bg-emerald/5 text-emerald border-emerald/20' : 'bg-red-50 text-red-600 border-red-100'
-                      }`}>
+                      <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border ${customer.status === 'Active' ? 'bg-emerald/5 text-emerald border-emerald/20' : 'bg-red-50 text-red-600 border-red-100'
+                        }`}>
                         {customer.status}
                       </span>
                     </td>
                     <td className="px-10 py-8 text-right relative">
-                      <button 
+                      <button
                         onClick={() => setActiveDropdown(activeDropdown === customer.id ? null : customer.id)}
                         className="p-3 text-muted hover:text-forest bg-offwhite border border-beige rounded-xl transition-all shadow-sm group-hover:shadow-md"
                       >
@@ -224,13 +265,19 @@ export default function Customers() {
                       </button>
                       {activeDropdown === customer.id && (
                         <div className="absolute right-14 top-12 w-48 bg-white rounded-2xl shadow-2xl border border-beige z-20 overflow-hidden animate-in zoom-in-95 duration-200">
-                          <button 
+                          <button
+                            onClick={() => handleOpenMembershipModal(customer)}
+                            className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-forest hover:bg-offwhite transition-colors flex items-center border-b border-beige/40"
+                          >
+                            <CreditCard size={16} className="mr-3 text-gold" /> Membership
+                          </button>
+                          <button
                             onClick={() => handleOpenModal(customer)}
                             className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-forest hover:bg-offwhite transition-colors flex items-center"
                           >
                             <Edit3 size={16} className="mr-3 text-sage" /> Edit Profile
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleDelete(customer.id)}
                             className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 transition-colors flex items-center"
                           >
@@ -249,17 +296,17 @@ export default function Customers() {
         {totalPages > 1 && (
           <div className="px-10 py-8 bg-offwhite/30 border-t border-beige flex items-center justify-between">
             <p className="text-[10px] font-black text-muted uppercase tracking-widest">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredCustomers.length)} of {filteredCustomers.length} clients
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredCustomers.length)} of {filteredCustomers.length} members
             </p>
             <div className="flex items-center space-x-3">
-              <button 
+              <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="p-3 bg-white border border-beige rounded-xl text-forest hover:bg-offwhite disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
               >
                 <ChevronLeft size={18} />
               </button>
-              <button 
+              <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 className="p-3 bg-white border border-beige rounded-xl text-forest hover:bg-offwhite disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
@@ -278,15 +325,15 @@ export default function Customers() {
             <div className="px-6 py-6 sm:px-10 sm:py-10 border-b border-beige flex items-center justify-between bg-offwhite/50">
               <div>
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-forest tracking-tight">
-                  {editingCustomer ? 'Update Profile' : 'New Client Profile'}
+                  {editingCustomer ? 'Update Profile' : 'New Member Profile'}
                 </h2>
-                <p className="text-sm font-medium text-muted mt-1">Refine the professional details of your client.</p>
+                <p className="text-sm font-medium text-muted mt-1">Refine the professional details of your member.</p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="p-4 text-muted hover:text-forest transition-colors bg-white rounded-2xl shadow-sm border border-beige">
                 <X size={24} />
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 sm:p-10 md:p-12 space-y-6 sm:space-y-8">
               {/* Personal Information */}
               <div>
@@ -308,7 +355,7 @@ export default function Customers() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Email ID</label>
-                    <input {...register("email")} type="email" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. client@example.com" />
+                    <input {...register("email")} type="email" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. member@example.com" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Date of Birth</label>
@@ -389,6 +436,98 @@ export default function Customers() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Membership Modal */}
+      {isMembershipModalOpen && editingCustomer && (
+        <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto no-scrollbar">
+          <div className="bg-white rounded-3xl sm:rounded-[3rem] shadow-2xl w-full max-w-2xl border border-white/20 animate-in zoom-in-95 duration-500 my-4 sm:my-8">
+            <div className="px-6 py-6 sm:px-10 sm:py-10 border-b border-beige flex items-center justify-between bg-offwhite/50">
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-forest tracking-tight">Assign Membership</h2>
+                <p className="text-sm font-medium text-muted mt-1">Activate a new membership plan for {editingCustomer.name}.</p>
+              </div>
+              <button onClick={() => setIsMembershipModalOpen(false)} className="p-4 text-muted hover:text-forest transition-colors bg-white rounded-2xl shadow-sm border border-beige">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 sm:p-10 md:p-12 space-y-6 sm:space-y-8">
+              {/* Read-Only Details */}
+              <div className="bg-offwhite/50 p-6 rounded-2xl border border-beige/50">
+                <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mb-4">Member Information</p>
+                <div className="grid grid-cols-2 gap-4 text-sm font-bold text-forest">
+                  <div>Name: <span className="text-muted ml-1">{editingCustomer.name}</span></div>
+                  <div>ID: <span className="text-muted ml-1">{editingCustomer.id?.slice(0,8)}</span></div>
+                  <div>Contact: <span className="text-muted ml-1">{editingCustomer.contact}</span></div>
+                  <div>Gender: <span className="text-muted ml-1">{editingCustomer.gender || 'Not specified'}</span></div>
+                  <div className="col-span-2">Address: <span className="text-muted ml-1">{editingCustomer.address || 'Not specified'}</span></div>
+                </div>
+              </div>
+
+              <form onSubmit={handleMembershipSubmit} className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Membership Start Date *</label>
+                  <input type="date" required value={membershipFormState.startDate} onChange={(e) => setMembershipFormState(p => ({...p, startDate: e.target.value}))} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Membership Plan *</label>
+                  <select required value={membershipFormState.plan} onChange={(e) => {
+                    const plan = e.target.value;
+                    const defaultAmount = plan === '3 Days' ? 729 : plan === '10 Days' ? 2500 : 7000;
+                    setMembershipFormState(p => ({
+                      ...p, 
+                      plan, 
+                      amount: p.amountType === 'Default' ? defaultAmount : p.amount
+                    }));
+                  }} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
+                    <option value="3 Days">3 Days</option>
+                    <option value="10 Days">10 Days</option>
+                    <option value="30 Days">30 Days</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Total Amount (₹) *</label>
+                  <div className="flex gap-4">
+                    <select 
+                      value={membershipFormState.amountType} 
+                      onChange={(e) => {
+                        const amountType = e.target.value;
+                        const defaultAmount = membershipFormState.plan === '3 Days' ? 729 : membershipFormState.plan === '10 Days' ? 2500 : 7000;
+                        setMembershipFormState(p => ({
+                          ...p, 
+                          amountType, 
+                          amount: amountType === 'Default' ? defaultAmount : p.amount
+                        }));
+                      }} 
+                      className={`h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none ${membershipFormState.amountType === 'Other' ? 'w-1/3' : 'w-full'}`}
+                    >
+                      <option value="Default">₹{membershipFormState.plan === '3 Days' ? 729 : membershipFormState.plan === '10 Days' ? 2500 : 7000}</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    {membershipFormState.amountType === 'Other' && (
+                      <input 
+                        type="number" 
+                        required 
+                        min="0" 
+                        value={membershipFormState.amount} 
+                        onChange={(e) => setMembershipFormState(p => ({...p, amount: e.target.value}))} 
+                        className="flex-1 h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all" 
+                        placeholder="Enter custom amount" 
+                      />
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex gap-6 pt-4">
+                  <button type="button" onClick={() => setIsMembershipModalOpen(false)} className="flex-1 px-8 py-5 bg-white text-muted border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Cancel</button>
+                  <button type="submit" className="flex-[2] px-8 py-5 bg-forest text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all shadow-xl shadow-forest/20">
+                    Activate Membership
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

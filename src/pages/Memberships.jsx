@@ -9,7 +9,7 @@ import ClientEditModal from '../components/ClientEditModal';
 export default function Memberships() {
   const { memberships, customers, addMembership, addNewMember, renewMembership, user, sendWhatsAppAlert } = useAppContext();
   const [filter, setFilter] = useState('All');
-  
+
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isNewMemberModalOpen, setIsNewMemberModalOpen] = useState(false);
@@ -26,8 +26,8 @@ export default function Memberships() {
 
   const { register, handleSubmit, reset } = useForm();
 
-  const filteredMemberships = filter === 'All' 
-    ? memberships 
+  const filteredMemberships = filter === 'All'
+    ? memberships
     : memberships.filter(m => m.status === filter);
 
   const activeCount = memberships.filter(m => m.status === 'Active').length;
@@ -85,7 +85,7 @@ export default function Memberships() {
     setActiveMembership(membership);
     setIsDetailModalOpen(true);
     setIsDetailLoading(true);
-    
+
     try {
       if (supabase) {
         // Fetch Renewal Logs
@@ -94,7 +94,7 @@ export default function Memberships() {
           .select('*')
           .eq('membership_id', membership.id)
           .order('renewed_at', { ascending: false });
-        
+
         if (logs) setRenewalLogs(logs);
 
         // Fetch Member-specific Attendance (recent 10)
@@ -104,7 +104,7 @@ export default function Memberships() {
           .eq('client_id', membership.customerId)
           .order('date', { ascending: false })
           .limit(10);
-        
+
         if (att) setMemberAttendance(att);
       }
     } catch (error) {
@@ -122,14 +122,14 @@ export default function Memberships() {
           <p className="text-muted mt-2 font-medium">Curate and track client wellness journeys.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-          <button 
+          <button
             onClick={() => setIsAddModalOpen(true)}
             className="flex items-center justify-center px-8 py-4 bg-white text-forest border border-beige rounded-2xl font-black uppercase tracking-[0.15em] text-[10px] hover:bg-offwhite transition-all shadow-sm"
           >
             <CreditCard size={18} className="mr-2 text-sage" />
             Assign Plan
           </button>
-          <button 
+          <button
             onClick={() => setIsNewMemberModalOpen(true)}
             className="flex items-center justify-center px-8 py-4 bg-forest text-white rounded-2xl font-black uppercase tracking-[0.15em] text-[10px] hover:bg-forest-hover transition-all shadow-xl shadow-forest/20 active:scale-95"
           >
@@ -172,26 +172,25 @@ export default function Memberships() {
       <div className="luxury-card overflow-hidden bg-white">
         <div className="p-8 sm:p-10 border-b border-beige flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
           <div className="flex items-center space-x-3">
-             <Filter size={18} className="text-sage" />
-             <h3 className="text-xl font-extrabold text-forest tracking-tight">Enrollment Directory</h3>
+            <Filter size={18} className="text-sage" />
+            <h3 className="text-xl font-extrabold text-forest tracking-tight">Enrollment Directory</h3>
           </div>
           <div className="flex p-1.5 bg-offwhite rounded-[1.25rem] border border-beige w-full sm:w-auto">
             {['All', 'Active', 'Pending', 'Expired'].map((status) => (
-              <button 
+              <button
                 key={status}
                 onClick={() => setFilter(status)}
-                className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  filter === status 
-                    ? 'bg-forest text-white shadow-lg' 
+                className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === status
+                    ? 'bg-forest text-white shadow-lg'
                     : 'text-muted hover:text-forest'
-                }`}
+                  }`}
               >
                 {status}
               </button>
             ))}
           </div>
         </div>
-        
+
         <div className="overflow-x-auto no-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -204,14 +203,31 @@ export default function Memberships() {
               </tr>
             </thead>
             <tbody className="divide-y divide-beige/40">
-              {filteredMemberships.map((membership) => {
-                const customer = customers.find(c => c.id === membership.customerId);
-                const daysLeft = Math.ceil((new Date(membership.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+              {filteredMemberships.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-10 py-24 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-20 h-20 bg-offwhite rounded-full flex items-center justify-center mb-5 border border-beige">
+                        <CreditCard size={28} className="text-muted/40" />
+                      </div>
+                      <p className="text-forest font-extrabold text-xl">No Membership Records Found</p>
+                      <p className="text-muted text-sm mt-2">There are currently no memberships matching your criteria.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredMemberships.map((membership) => {
+                  const customer = customers.find(c => c.id === membership.customerId);
+                  const daysLeft = Math.ceil((new Date(membership.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
                 const isExpiringSoon = daysLeft > 0 && daysLeft <= 14;
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const expiry = new Date(membership.expiryDate);
+                const dynamicStatus = expiry < today ? 'Expired' : (membership.status || 'Active');
 
                 return (
-                  <tr 
-                    key={membership.id} 
+                  <tr
+                    key={membership.id}
                     className="hover:bg-offwhite transition-colors group cursor-pointer"
                     onClick={(e) => {
                       if (e.target.closest('button')) return;
@@ -221,10 +237,10 @@ export default function Memberships() {
                     <td className="px-10 py-8">
                       <div className="flex items-center">
                         <div className="w-12 h-12 rounded-2xl bg-offwhite border border-beige flex items-center justify-center text-forest font-black text-sm mr-4 shadow-sm group-hover:bg-forest group-hover:text-white transition-all">
-                           {customer?.name?.charAt(0) || '?'}
+                          {customer?.name?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p 
+                          <p
                             onClick={(e) => {
                               e.stopPropagation();
                               if (customer) setEditingCustomer(customer);
@@ -243,7 +259,7 @@ export default function Memberships() {
                     </td>
                     <td className="px-10 py-8 hidden md:table-cell">
                       <div className="flex flex-col space-y-1">
-                        <p className="text-xs font-bold text-forest">{membership.startDate ? new Date(membership.startDate).toLocaleDateString('en-IN', {day: 'numeric', month: 'short'}) : 'N/A'} – {membership.expiryDate ? new Date(membership.expiryDate).toLocaleDateString('en-IN', {day: 'numeric', month: 'short'}) : 'N/A'}</p>
+                        <p className="text-xs font-bold text-forest">{membership.startDate ? new Date(membership.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'} – {membership.expiryDate ? new Date(membership.expiryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
                         {isExpiringSoon && (
                           <div className="flex items-center text-[9px] font-black text-gold uppercase tracking-[0.1em]">
                             <Clock size={10} className="mr-1" /> Ends in {daysLeft} days
@@ -252,30 +268,29 @@ export default function Memberships() {
                       </div>
                     </td>
                     <td className="px-10 py-8">
-                      <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border ${
-                        membership.status === 'Active' ? 'bg-emerald/5 text-emerald border-emerald/20' :
-                        membership.status === 'Pending' ? 'bg-gold/5 text-gold border-gold/20' :
-                        membership.status === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
-                        'bg-offwhite text-muted border-beige'
-                      }`}>
-                        {membership.status}
+                      <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border transition-all ${dynamicStatus === 'Active' ? 'bg-[#DDF5E5] text-[#1F7A45] border-[#DDF5E5]' :
+                          dynamicStatus === 'Pending' ? 'bg-[#FEF9C3] text-[#A16207] border-[#FEF08A]' :
+                            dynamicStatus === 'Expired' ? 'bg-[#FDE2E2] text-[#B42318] border-[#FDE2E2]' :
+                              'bg-offwhite text-muted border-beige'
+                        }`}>
+                        {dynamicStatus}
                       </span>
                     </td>
                     <td className="px-10 py-8 text-right">
                       <div className="flex justify-end items-center space-x-2">
-                        <button 
+                        <button
                           onClick={() => openDetailModal(membership)}
                           className="p-3 text-muted hover:text-forest bg-offwhite border border-beige rounded-xl transition-all shadow-sm hover:shadow-md"
                         >
                           <Eye size={16} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => openRenewModal(membership)}
                           className="p-3 text-forest hover:text-white bg-offwhite hover:bg-gold border border-beige hover:border-gold rounded-xl transition-all shadow-sm hover:shadow-md"
                         >
                           <Clock size={16} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => {
                             sendWhatsAppAlert(membership.customerId, 'Renewal Reminder', { expiry_date: membership.expiryDate });
                           }}
@@ -291,7 +306,7 @@ export default function Memberships() {
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>
@@ -308,63 +323,63 @@ export default function Memberships() {
               </button>
             </div>
             <div className="p-10 space-y-8">
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                 <div className="flex items-center p-6 bg-offwhite rounded-3xl border border-beige col-span-1 sm:col-span-2">
-                   <div className="w-14 h-14 bg-forest rounded-2xl flex items-center justify-center text-white mr-5 shadow-lg shrink-0">
-                     <Users size={24} />
-                   </div>
-                   <div className="overflow-hidden">
-                     <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Practitioner</p>
-                     <p className="text-xl font-extrabold text-forest truncate">{customers.find(c => c.id === selectedMembership?.customerId)?.name}</p>
-                     <p className="text-[10px] font-bold text-sage uppercase tracking-widest mt-1 flex items-center">
-                       <ShieldAlert size={10} className="mr-1" /> {customers.find(c => c.id === selectedMembership?.customerId)?.whatsapp_number || 'No WhatsApp'}
-                     </p>
-                   </div>
-                 </div>
-               </div>
-
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                 <div className="space-y-3">
-                   <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Renewal Extension</label>
-                   <select 
-                     id="renewalDuration"
-                     className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
-                     defaultValue="30"
-                   >
-                     <option value="30">Monthly Flow (+30 Days)</option>
-                     <option value="90">Quarterly Balance (+90 Days)</option>
-                     <option value="180">Half-Yearly (+180 Days)</option>
-                     <option value="365">Annual Harmony (+365 Days)</option>
-                   </select>
-                 </div>
-                 <div className="space-y-3">
-                   <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Current Expiry</label>
-                   <div className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest/40 flex items-center">
-                     <Clock size={16} className="mr-3" />
-                     {selectedMembership?.expiryDate ? new Date(selectedMembership.expiryDate).toLocaleDateString('en-IN') : 'N/A'}
-                   </div>
-                 </div>
-               </div>
-
-               <div className="flex gap-4 pt-4">
-                 <button onClick={() => setIsRenewModalOpen(false)} className="flex-1 px-8 py-4 bg-white text-muted border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Discard</button>
-                 <div className="flex items-center space-x-2">
-                    <button 
-                      onClick={() => {
-                        sendWhatsAppAlert(selectedMembership?.customerId, 'Renewal Reminder', { expiry_date: selectedMembership?.expiryDate });
-                      }}
-                      className="p-2.5 text-emerald bg-white border border-beige rounded-xl hover:bg-emerald hover:text-white transition-all shadow-sm"
-                    >
-                      <Activity size={14} />
-                    </button>
-                    <button 
-                      onClick={() => handleRenew(document.getElementById('renewalDuration').value)} 
-                      className="text-[10px] font-black uppercase tracking-[0.2em] px-5 py-2.5 bg-forest text-white hover:bg-forest-hover rounded-xl transition-all shadow-lg shadow-forest/10 active:scale-95"
-                    >
-                      Complete Extension
-                    </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="flex items-center p-6 bg-offwhite rounded-3xl border border-beige col-span-1 sm:col-span-2">
+                  <div className="w-14 h-14 bg-forest rounded-2xl flex items-center justify-center text-white mr-5 shadow-lg shrink-0">
+                    <Users size={24} />
                   </div>
-               </div>
+                  <div className="overflow-hidden">
+                    <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Practitioner</p>
+                    <p className="text-xl font-extrabold text-forest truncate">{customers.find(c => c.id === selectedMembership?.customerId)?.name}</p>
+                    <p className="text-[10px] font-bold text-sage uppercase tracking-widest mt-1 flex items-center">
+                      <ShieldAlert size={10} className="mr-1" /> {customers.find(c => c.id === selectedMembership?.customerId)?.whatsapp_number || 'No WhatsApp'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Renewal Extension</label>
+                  <select
+                    id="renewalDuration"
+                    className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
+                    defaultValue="30"
+                  >
+                    <option value="30">Monthly Flow (+30 Days)</option>
+                    <option value="90">Quarterly Balance (+90 Days)</option>
+                    <option value="180">Half-Yearly (+180 Days)</option>
+                    <option value="365">Annual Harmony (+365 Days)</option>
+                  </select>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Current Expiry</label>
+                  <div className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest/40 flex items-center">
+                    <Clock size={16} className="mr-3" />
+                    {selectedMembership?.expiryDate ? new Date(selectedMembership.expiryDate).toLocaleDateString('en-IN') : 'N/A'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button onClick={() => setIsRenewModalOpen(false)} className="flex-1 px-8 py-4 bg-white text-muted border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Discard</button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      sendWhatsAppAlert(selectedMembership?.customerId, 'Renewal Reminder', { expiry_date: selectedMembership?.expiryDate });
+                    }}
+                    className="p-2.5 text-emerald bg-white border border-beige rounded-xl hover:bg-emerald hover:text-white transition-all shadow-sm"
+                  >
+                    <Activity size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleRenew(document.getElementById('renewalDuration').value)}
+                    className="text-[10px] font-black uppercase tracking-[0.2em] px-5 py-2.5 bg-forest text-white hover:bg-forest-hover rounded-xl transition-all shadow-lg shadow-forest/10 active:scale-95"
+                  >
+                    Complete Extension
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -383,7 +398,7 @@ export default function Memberships() {
                 <X size={24} />
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit(onSubmitNewMember, (err) => console.log("Form validation errors:", err))} className="p-10 sm:p-14 space-y-10">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Profile Section */}
@@ -406,22 +421,27 @@ export default function Memberships() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
                     <div className="space-y-2">
                       <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Full Legal Name</label>
-                      <input {...register("name", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="e.g. Rahul Sharma" />
+                      <input {...register("full_name", { required: "Full name is required" })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="e.g. Rahul Sharma" />
                     </div>
                     <div className="space-y-2">
                       <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact Number</label>
-                      <input {...register("contact", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="+91 00000 00000" />
+                      <input {...register("mobile_number", { required: "Mobile number is required" })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="+91 00000 00000" />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Living Address</label>
-                      <input {...register("address", { required: true })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Street, City, State, Zip" />
+                      <input {...register("address")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Street, City, State, Zip" />
                     </div>
                     <div className="space-y-2">
                       <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Primary Goal</label>
                       <select {...register("purpose")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
-                        <option value="Health">Personal Health & Wellness</option>
-                        <option value="Business">Entrepreneurial Growth</option>
-                        <option value="Mental">Holistic Mental Clarity</option>
+                        <option value="Weight Loss">Weight Loss</option>
+                        <option value="Weight Gain">Weight Gain</option>
+                        <option value="Yoga">Yoga</option>
+                        <option value="Meditation">Meditation</option>
+                        <option value="Fitness">Fitness</option>
+                        <option value="Health & Vitality">Health & Vitality</option>
+                        <option value="Stress Management">Stress Management</option>
+                        <option value="General Wellness">General Wellness</option>
                       </select>
                     </div>
                     <div className="space-y-2">
@@ -429,15 +449,21 @@ export default function Memberships() {
                       <input {...register("profession")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="e.g. Design Architect" />
                     </div>
                     <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referral Channel</label>
-                      <select {...register("referralSource")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
-                        <option value="Instagram">Instagram Bloom</option>
-                        <option value="Word of Mouth">Kindred Referral</option>
-                        <option value="Website">Global Website</option>
-                        <option value="LinkedIn">Professional Network</option>
+                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referred By</label>
+                      <input {...register("referred_by")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Name or Source" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Member Type</label>
+                      <select {...register("member_type")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
+                        <option value="Member">Member</option>
+                        <option value="Coach">Coach</option>
                       </select>
                     </div>
                     <div className="space-y-2">
+                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Joining Date</label>
+                      <input {...register("joining_date")} type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
                       <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Engagement Plan</label>
                       <select {...register("plan")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
                         <option value="Monthly Flow">Monthly Flow (₹15,000)</option>
@@ -475,13 +501,21 @@ export default function Memberships() {
                     <span className="px-3 py-1 bg-sage/10 text-sage text-[9px] font-black uppercase tracking-widest rounded-lg border border-sage/10">
                       {activeMembership.customerId}
                     </span>
-                    <span className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg border ${
-                      activeMembership.status === 'Active' ? 'bg-emerald/10 text-emerald border-emerald/20' :
-                      activeMembership.status === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
-                      'bg-gold/10 text-gold border-gold/20'
-                    }`}>
-                      {activeMembership.status} Journey
-                    </span>
+                    {(() => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const expiry = new Date(activeMembership.expiryDate);
+                      const detailStatus = expiry < today ? 'Expired' : (activeMembership.status || 'Active');
+                      return (
+                        <span className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg border transition-all ${detailStatus === 'Active' ? 'bg-[#DDF5E5] text-[#1F7A45] border-[#DDF5E5]' :
+                            detailStatus === 'Pending' ? 'bg-[#FEF9C3] text-[#A16207] border-[#FEF08A]' :
+                              detailStatus === 'Expired' ? 'bg-[#FDE2E2] text-[#B42318] border-[#FDE2E2]' :
+                                'bg-offwhite text-muted border-beige'
+                          }`}>
+                          {detailStatus} Journey
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -536,7 +570,7 @@ export default function Memberships() {
                         <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Quick Actions</h3>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <button 
+                        <button
                           onClick={() => {
                             setIsDetailModalOpen(false);
                             openRenewModal(activeMembership);
@@ -546,7 +580,7 @@ export default function Memberships() {
                           <Clock size={20} className="mb-2 text-gold group-hover:text-white" />
                           <span className="text-[8px] font-black uppercase tracking-widest">Renew Plan</span>
                         </button>
-                        <button 
+                        <button
                           onClick={() => sendWhatsAppAlert(activeMembership?.customerId, 'Renewal Reminder', { expiry_date: activeMembership?.expiryDate })}
                           className="flex flex-col items-center justify-center p-6 bg-offwhite border border-beige rounded-2xl hover:bg-emerald hover:text-white transition-all group"
                         >
@@ -659,9 +693,8 @@ export default function Memberships() {
                                 <p className="text-[10px] font-bold text-forest">{new Date(att.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                               </div>
                               <div>
-                                <span className={`px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest ${
-                                  att.status === 'Present' ? 'bg-emerald/10 text-emerald' : 'bg-red-50 text-red-500'
-                                }`}>
+                                <span className={`px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest ${att.status === 'Present' ? 'bg-emerald/10 text-emerald' : 'bg-red-50 text-red-500'
+                                  }`}>
                                   {att.status}
                                 </span>
                               </div>
@@ -707,9 +740,9 @@ export default function Memberships() {
 
       {/* Client Edit Modal */}
       {editingCustomer && (
-        <ClientEditModal 
-          customer={editingCustomer} 
-          onClose={() => setEditingCustomer(null)} 
+        <ClientEditModal
+          customer={editingCustomer}
+          onClose={() => setEditingCustomer(null)}
         />
       )}
     </div>

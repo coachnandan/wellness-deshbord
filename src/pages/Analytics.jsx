@@ -1,10 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { useAppContext } from '../context/AppContext';
 import { TrendingUp, Users, Calendar, DollarSign, Award, Activity } from 'lucide-react';
 
 export default function Analytics() {
   const { customers, memberships, attendance } = useAppContext();
+  const [layoutReady, setLayoutReady] = useState(false);
+
+  useEffect(() => {
+    const id = setTimeout(() => setLayoutReady(true), 500);
+    return () => clearTimeout(id);
+  }, []);
 
   // Color theme variables
   const COLORS = ['#1F4D3A', '#C2A878', '#7A9B8E', '#D97706'];
@@ -131,7 +137,8 @@ export default function Analytics() {
             <span className="px-3 py-1.5 bg-offwhite border border-beige rounded-xl text-[9px] font-black text-forest uppercase tracking-widest">Year-to-date</span>
           </div>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            {layoutReady && (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <AreaChart data={mockRevenueTrend} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
@@ -146,6 +153,7 @@ export default function Analytics() {
                 <Area type="monotone" dataKey="revenue" stroke="#1F4D3A" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -155,7 +163,8 @@ export default function Analytics() {
             <span className="px-3 py-1.5 bg-offwhite border border-beige rounded-xl text-[9px] font-black text-forest uppercase tracking-widest">Weekly</span>
           </div>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            {layoutReady && (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={mockAttendanceTrend} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E7E5E4" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 10, fontWeight: 700 }} dy={10} />
@@ -164,6 +173,7 @@ export default function Analytics() {
                 <Bar dataKey="rate" fill="#C2A878" radius={[4, 4, 0, 0]} barSize={28} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
@@ -174,7 +184,8 @@ export default function Analytics() {
           <h3 className="text-xl font-extrabold text-forest tracking-tight mb-8">Practitioner Focus Distribution</h3>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-8">
             <div className="w-[200px] h-[200px] shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
+              {layoutReady && (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={calculations.focusData}
@@ -192,6 +203,7 @@ export default function Analytics() {
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
+              )}
             </div>
             <div className="space-y-4 w-full">
               {calculations.focusData.map((item, idx) => (
@@ -211,7 +223,8 @@ export default function Analytics() {
           <h3 className="text-xl font-extrabold text-forest tracking-tight mb-8">Selected Engagement Plans</h3>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-8">
             <div className="w-[200px] h-[200px] shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
+              {layoutReady && (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={calculations.planData}
@@ -229,6 +242,7 @@ export default function Analytics() {
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
+              )}
             </div>
             <div className="space-y-4 w-full">
               {calculations.planData.length > 0 ? (

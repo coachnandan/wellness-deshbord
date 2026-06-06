@@ -29,6 +29,23 @@ class ErrorBoundary extends React.Component {
           textAlign: 'center'
         }}>
           <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>Something went wrong.</h1>
+          {this.state.error && (
+            <pre style={{ 
+              background: '#fef2f2', 
+              border: '1px solid #fecaca', 
+              borderRadius: '8px', 
+              padding: '16px', 
+              marginBottom: '24px', 
+              maxWidth: '600px', 
+              overflow: 'auto', 
+              fontSize: '12px', 
+              color: '#991b1b',
+              textAlign: 'left',
+              whiteSpace: 'pre-wrap'
+            }}>
+              {this.state.error.message}
+            </pre>
+          )}
           <p style={{ color: '#6B7280', marginBottom: '24px' }}>We encountered an unexpected error. Please try refreshing the page.</p>
           <button 
             onClick={() => window.location.reload()}

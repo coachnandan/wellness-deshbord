@@ -3,6 +3,13 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 
+// Suppress known Recharts v3 harmless dimension warnings
+const originalWarn = console.warn;
+console.warn = (...args) => {
+  if (args[0] && typeof args[0] === 'string' && args[0].includes('width(-1)')) return;
+  originalWarn.apply(console, args);
+};
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);

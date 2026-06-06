@@ -12,10 +12,14 @@ export default function useRealtime({
   setAttendance,
   setMemberships,
   setNotifications,
+  setAttendanceLocks,
+  setVisitors,
   customersRef,
   attendanceRef,
   membershipsRef,
   notificationsRef,
+  attendanceLocksRef,
+  visitorsRef,
 }) {
   useEffect(() => {
     if (!supabase) return;
@@ -41,17 +45,19 @@ export default function useRealtime({
       { name: "clients", set: setCustomers, ref: customersRef },
       { name: "attendance", set: setAttendance, ref: attendanceRef },
       { name: "memberships", set: setMemberships, ref: membershipsRef },
-      { name: "notifications", set: setNotifications, ref: notificationsRef },
+      { name: "notification_logs", set: setNotifications, ref: notificationsRef },
+      { name: "attendance_locks", set: setAttendanceLocks, ref: attendanceLocksRef, idKey: "date" },
+      { name: "visitor_logs", set: setVisitors, ref: visitorsRef },
     ];
 
-    tables.forEach(({ name, set, ref }) => {
+    tables.forEach(({ name, set, ref, idKey = "id" }) => {
       channel
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: name },
           (payload) => {
             const newRecord = payload.new;
-            upsert(ref, set, newRecord);
+            upsert(ref, set, newRecord, idKey);
           }
         )
         .on(
@@ -59,7 +65,7 @@ export default function useRealtime({
           { event: "UPDATE", schema: "public", table: name },
           (payload) => {
             const updated = payload.new;
-            upsert(ref, set, updated);
+            upsert(ref, set, updated, idKey);
           }
         )
         .on(
@@ -67,7 +73,7 @@ export default function useRealtime({
           { event: "DELETE", schema: "public", table: name },
           (payload) => {
             const old = payload.old;
-            remove(ref, set, old);
+            remove(ref, set, old, idKey);
           }
         );
     });

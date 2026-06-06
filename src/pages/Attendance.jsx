@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
+  Calendar, 
   Search, 
-  Calendar as CalendarIcon, 
   Check, 
   X, 
-  Filter, 
+  ChevronRight,
+  Filter,
+  MoreHorizontal,
+  Clock,
+  Calendar as CalendarIcon,
+  Lock,
+  Unlock,
   UserCheck, 
   UserMinus, 
   Users, 
   Download, 
   ChevronLeft, 
-  ChevronRight, 
-  Clock,
   TrendingUp,
   BarChart as BarChartIcon
 } from 'lucide-react';
@@ -22,74 +26,192 @@ import {
 import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
 import ClientEditModal from '../components/ClientEditModal';
+import AttendanceCalendarModal from '../components/AttendanceCalendarModal';
+import { getISTDateString, getISTTimeString, getISTDisplayDate } from '../utils/dateUtils';
 
 export default function Attendance() {
-  const { attendance = [], customers = [], memberships = [], updateAttendance } = useAppContext();
+  const { attendance = [], customers = [], memberships = [], attendanceLocks = [], updateAttendance, finalizeAttendance } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [editingCustomer, setEditingCustomer] = useState(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [layoutReady, setLayoutReady] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(() => getISTDateString());
+
+  useEffect(() => {
+    const id = setTimeout(() => setLayoutReady(true), 500);
+    return () => clearTimeout(id);
+  }, []);
   
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayAttendance = attendance.filter(a => a.date === todayStr);
+  const todayStr = getISTDateString();
+  const selectedAttendance = attendance.filter(a => a.date === selectedDate);
 
   const stats = {
     total: customers.length || 0,
-    present: todayAttendance.filter(a => a.status === 'Present').length || 0,
-    absent: todayAttendance.filter(a => a.status === 'Absent').length || 0,
-    pending: (customers.length || 0) - todayAttendance.length
+    present: selectedAttendance.filter(a => a.status === 'Present').length || 0,
+    absent: selectedAttendance.filter(a => a.status === 'Absent').length || 0,
+    shakes: selectedAttendance.filter(a => a.status === 'Shake').length || 0
   };
 
-  // Mock data for the weekly flow chart
-  const weeklyFlowData = [
-    { day: 'Mon', present: 12, absent: 2 },
-    { day: 'Tue', present: 15, absent: 1 },
-    { day: 'Wed', present: 10, absent: 4 },
-    { day: 'Thu', present: 18, absent: 0 },
-    { day: 'Fri', present: 14, absent: 3 },
-    { day: 'Sat', present: 22, absent: 1 },
-    { day: 'Sun', present: stats.present, absent: stats.absent },
-  ];
+  // Dynamic weekly flow chart — last 7 days real attendance data
+  const getWeeklyFlowData = () => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const data = days.map(day => ({ day, present: 0, absent: 0, shake: 0 }));
 
-  const handleMarkAttendance = (customerId, isPresent) => {
-    updateAttendance({
-      customerId,
-      date: todayStr,
-      status: isPresent ? 'Present' : 'Absent',
-      checkIn: isPresent ? new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-',
+    const oneWeekAgo = new Date(getISTDateString());
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    attendance.forEach(att => {
+      const attDate = new Date(att.date);
+      if (attDate >= oneWeekAgo) {
+        const dayName = days[attDate.getDay()];
+        const dayObj = data.find(d => d.day === dayName);
+        if (dayObj) {
+          if (att.status === 'Present') dayObj.present++;
+          else if (att.status === 'Absent') dayObj.absent++;
+          else if (att.status === 'Shake') dayObj.shake++;
+        }
+      }
     });
-    
-    toast.success(`${isPresent ? 'Presence' : 'Absence'} marked for ${customers.find(c => c.id === customerId)?.name}`);
+    return data;
+  };
+
+  const weeklyFlowData = getWeeklyFlowData();
+
+  const isLocked = attendanceLocks.some(lock => lock.date === selectedDate && lock.is_locked);
+  const currentLock = attendanceLocks.find(lock => lock.date === selectedDate && lock.is_locked);
+
+  const handleFinalize = async () => {
+    if (window.confirm(`Are you sure you want to finalize attendance for ${getISTDisplayDate(selectedDate)}? This action cannot be undone.`)) {
+      try {
+        await finalizeAttendance(selectedDate);
+        toast.success(`Attendance for ${getISTDisplayDate(selectedDate)} has been locked.`);
+      } catch (error) {
+        toast.error(error.message);
+      }
+    }
+  };
+
+  const handleMarkAttendance = async (customerId, newStatus) => {
+    if (isLocked) {
+      toast.error('Attendance for this date is locked and cannot be modified.');
+      return;
+    }
+    try {
+      await updateAttendance({
+        customerId,
+        date: selectedDate,
+        status: newStatus,
+        checkIn: newStatus === 'Present' || newStatus === 'Shake' ? getISTTimeString() : '-',
+      });
+      toast.success(`${newStatus} marked for ${customers.find(c => c.id === customerId)?.name}`);
+    } catch (error) {
+      console.error('Attendance marking failed:', error);
+      toast.error(`Failed to mark attendance: ${error.message || 'Unknown error'}`);
+    }
   };
 
   const getMembershipStatus = (customerId) => {
-    const membership = memberships.find(m => m.customerId === customerId);
-    return membership ? membership.status : 'No Plan';
+    const customerMemberships = memberships.filter(m => m.customerId === customerId);
+    if (customerMemberships.length === 0) {
+      return 'Afresh';
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const activeAndNotExpired = customerMemberships.find(m => {
+      const expiry = new Date(m.expiryDate);
+      return expiry >= today;
+    });
+
+    if (activeAndNotExpired) {
+      return 'Active';
+    } else {
+      return 'Expired';
+    }
   };
 
   const filteredClients = customers.filter(client => {
     const matchesSearch = 
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.contact.includes(searchTerm);
+      (client.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.contact || '').includes(searchTerm);
     
-    const record = todayAttendance.find(a => a.customerId === client.id);
+    const record = selectedAttendance.find(a => a.customerId === client.id);
     const status = record ? record.status : 'Pending';
     const matchesStatus = filterStatus === 'All' || status === filterStatus;
     
     return matchesSearch && matchesStatus;
   });
 
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+    setIsCalendarOpen(false);
+  };
+
+  const displayDate = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  const isToday = selectedDate === todayStr;
+
   return (
     <div className="space-y-12">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
         <div>
           <h1 className="text-4xl font-extrabold text-forest tracking-tight">Attendance Console</h1>
-          <p className="text-muted mt-2 font-medium">Coordinate daily holistic wellness presence for all clients.</p>
+          <p className="text-muted mt-2 font-medium">Coordinate daily holistic wellness presence for all members.</p>
         </div>
-        <div className="flex items-center space-x-3 bg-white px-6 py-4 rounded-2xl border border-beige shadow-luxury">
-          <CalendarIcon size={18} className="text-gold" />
-          <span className="text-xs font-black text-forest uppercase tracking-widest">
-            {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-          </span>
+        <div className="flex items-center space-x-3">
+          {isLocked && (
+            <div className="flex items-center space-x-2 bg-red-50 px-4 py-3 rounded-xl border border-red-100">
+              <Lock size={14} className="text-red-500" />
+              <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">
+                Finalized by {currentLock?.locked_by_name?.split(' ')[0]}
+              </span>
+            </div>
+          )}
+          {!isLocked && (
+            <button
+              onClick={handleFinalize}
+              className="flex items-center space-x-2 bg-[#1F4D3A] text-white px-5 py-3 rounded-xl shadow-md hover:bg-[#2A6B51] transition-all"
+            >
+              <Lock size={14} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Finalize Day</span>
+            </button>
+          )}
+          <div className="flex items-center space-x-3 bg-white px-6 py-4 rounded-2xl border border-beige shadow-luxury">
+            <CalendarIcon size={18} className="text-gold" />
+            <span className="text-xs font-black text-forest uppercase tracking-widest">
+              {getISTDisplayDate(selectedDate)}
+            </span>
+            {!isToday && (
+              <button
+                onClick={() => setSelectedDate(todayStr)}
+                className="ml-2 px-3 py-1 bg-sage/10 text-sage rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-sage/20 transition-all"
+              >
+                Today
+              </button>
+            )}
+          </div>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="hidden"
+            id="attendance-date-picker"
+          />
+          <label
+            htmlFor="attendance-date-picker"
+            className="flex items-center space-x-2 bg-white border border-beige px-6 py-4 rounded-2xl font-black uppercase tracking-[0.1em] text-[10px] text-forest hover:bg-offwhite transition-all shadow-sm cursor-pointer"
+          >
+            <CalendarIcon size={16} />
+            <span>Pick Date</span>
+          </label>
+          <button
+            onClick={() => setIsCalendarOpen(true)}
+            className="flex items-center space-x-2 bg-forest text-white px-6 py-4 rounded-2xl font-black uppercase tracking-[0.1em] text-[10px] hover:bg-forest-hover transition-all shadow-lg shadow-forest/20 active:scale-95"
+          >
+            <CalendarIcon size={16} />
+            <span>View Calendar</span>
+          </button>
         </div>
       </div>
 
@@ -105,24 +227,24 @@ export default function Attendance() {
           </div>
           <div className="luxury-card p-8 flex flex-col justify-between border-l-4 border-l-[#1F7A45] h-[160px]">
             <div className="flex justify-between items-start">
-              <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Present Today</p>
+              <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Present</p>
               <UserCheck size={20} className="text-[#1F7A45]/30" />
             </div>
             <p className="text-4xl font-extrabold text-[#1F7A45] leading-none">{stats.present}</p>
           </div>
           <div className="luxury-card p-8 flex flex-col justify-between border-l-4 border-l-[#B42318] h-[160px]">
             <div className="flex justify-between items-start">
-              <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Absent Today</p>
+              <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Absent</p>
               <UserMinus size={20} className="text-[#B42318]/30" />
             </div>
             <p className="text-4xl font-extrabold text-[#B42318] leading-none">{stats.absent}</p>
           </div>
           <div className="luxury-card p-8 flex flex-col justify-between border-l-4 border-l-gold h-[160px]">
             <div className="flex justify-between items-start">
-              <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Pending Entry</p>
+              <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Total Shakes</p>
               <Clock size={20} className="text-gold/30" />
             </div>
-            <p className="text-4xl font-extrabold text-gold leading-none">{stats.pending}</p>
+            <p className="text-4xl font-extrabold text-gold leading-none">{stats.shakes}</p>
           </div>
         </div>
 
@@ -141,19 +263,26 @@ export default function Attendance() {
                 <div className="w-2.5 h-2.5 bg-beige rounded-full"></div>
                 <span className="text-[9px] font-black text-muted uppercase tracking-widest">Absence</span>
               </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-2.5 h-2.5 bg-[#D97706] rounded-full"></div>
+                <span className="text-[9px] font-black text-muted uppercase tracking-widest">Shake</span>
+              </div>
             </div>
           </div>
           <div className="flex-1 h-[220px]">
+            {layoutReady && (
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={weeklyFlowData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E7E5E4" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 10, fontWeight: 700}} dy={15} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 10, fontWeight: 700}} />
                 <Tooltip cursor={{fill: '#F7F6F2'}} contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)'}} />
-                <Bar dataKey="present" fill="#1F4D3A" radius={[4, 4, 0, 0]} barSize={32} />
-                <Bar dataKey="absent" fill="#E7E5E4" radius={[4, 4, 0, 0]} barSize={32} />
+                <Bar dataKey="present" fill="#1F4D3A" radius={[4, 4, 0, 0]} barSize={20} />
+                <Bar dataKey="absent" fill="#E7E5E4" radius={[4, 4, 0, 0]} barSize={20} />
+                <Bar dataKey="shake" fill="#D97706" radius={[4, 4, 0, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
@@ -165,7 +294,7 @@ export default function Attendance() {
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-muted/40" size={20} />
             <input 
               type="text" 
-              placeholder="Search by client name or contact..." 
+              placeholder="Search by member name or contact..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-14 pr-6 py-4 bg-white border border-beige rounded-2xl text-forest font-bold text-sm placeholder-muted/30 focus:ring-4 focus:ring-sage/10 transition-all outline-none"
@@ -196,16 +325,14 @@ export default function Attendance() {
             <thead>
               <tr className="bg-offwhite/50 text-muted text-[10px] font-black uppercase tracking-[0.2em] border-b border-beige">
                 <th className="px-10 py-6">Practitioner Profile</th>
-                <th className="px-10 py-6 hidden md:table-cell">Professional Focus</th>
                 <th className="px-10 py-6 hidden lg:table-cell">Membership</th>
-                <th className="px-10 py-6">Session Status</th>
                 <th className="px-10 py-6">Marked By</th>
                 <th className="px-10 py-6 text-center">Attendance Marking</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-beige/40">
               {filteredClients.map((client) => {
-                const record = todayAttendance.find(a => a.customerId === client.id);
+                const record = selectedAttendance.find(a => a.customerId === client.id);
                 const memStatus = getMembershipStatus(client.id);
                 const status = record ? record.status : 'Pending';
 
@@ -227,38 +354,29 @@ export default function Attendance() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-10 py-8 hidden md:table-cell">
-                      <p className="font-extrabold text-forest text-sm leading-tight">{client.profession}</p>
-                      <p className="text-[10px] font-bold text-sage uppercase tracking-[0.15em] mt-1.5">{client.purpose}</p>
-                    </td>
                     <td className="px-10 py-8 hidden lg:table-cell">
-                      <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border ${
-                        memStatus === 'Active' ? 'bg-forest/5 text-forest border-forest/20' : 'bg-offwhite text-muted border-beige'
+                      <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border transition-all ${
+                        memStatus === 'Active' ? 'bg-[#DDF5E5] text-[#1F7A45] border-[#DDF5E5]' :
+                        memStatus === 'Afresh' ? 'bg-[#FEF9C3] text-[#A16207] border-[#FEF08A]' :
+                        'bg-[#FDE2E2] text-[#B42318] border-[#FDE2E2]'
                       }`}>
                         {memStatus}
                       </span>
                     </td>
                     <td className="px-10 py-8">
-                      <span className={`inline-flex items-center px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
-                        status === 'Present' ? 'bg-[#DDF5E5] text-[#1F7A45] border border-[#DDF5E5]' :
-                        status === 'Absent' ? 'bg-[#FDE2E2] text-[#B42318] border border-[#FDE2E2]' :
-                        'bg-offwhite text-muted border border-beige'
-                      }`}>
-                        {status === 'Pending' ? (
-                          <div className="flex items-center">
-                            <Clock size={12} className="mr-1.5 opacity-50" /> Pending Entry
-                          </div>
-                        ) : status}
-                      </span>
-                    </td>
-                    <td className="px-10 py-8">
                       <p className="text-xs font-bold text-forest">{record?.markedBy || '-'}</p>
+                      {record?.source && (
+                        <p className={`text-[9px] mt-1 font-bold uppercase tracking-widest ${record.source === 'Auto-Marked' ? 'text-amber-500' : 'text-sage'}`}>
+                          {record.source}
+                        </p>
+                      )}
                     </td>
                     <td className="px-10 py-8">
                       <div className="flex justify-center items-center space-x-3">
                         <button 
-                          onClick={() => handleMarkAttendance(client.id, true)}
-                          className={`flex items-center justify-center w-14 h-14 rounded-2xl transition-all duration-500 shadow-sm active:scale-90 ${
+                          onClick={() => handleMarkAttendance(client.id, 'Present')}
+                          disabled={isLocked}
+                          className={`flex items-center justify-center w-14 h-14 rounded-2xl transition-all duration-500 shadow-sm ${isLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-90'} ${
                             status === 'Present' 
                               ? 'bg-[#1F7A45] text-white shadow-lg shadow-[#1F7A45]/20' 
                               : 'bg-white text-[#1F7A45] border border-[#DDF5E5] hover:bg-[#DDF5E5]'
@@ -268,8 +386,9 @@ export default function Attendance() {
                           <Check size={24} strokeWidth={3} />
                         </button>
                         <button 
-                          onClick={() => handleMarkAttendance(client.id, false)}
-                          className={`flex items-center justify-center w-14 h-14 rounded-2xl transition-all duration-500 shadow-sm active:scale-90 ${
+                          onClick={() => handleMarkAttendance(client.id, 'Absent')}
+                          disabled={isLocked}
+                          className={`flex items-center justify-center w-14 h-14 rounded-2xl transition-all duration-500 shadow-sm ${isLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-90'} ${
                             status === 'Absent' 
                               ? 'bg-[#B42318] text-white shadow-lg shadow-[#B42318]/20' 
                               : 'bg-white text-[#B42318] border border-[#FDE2E2] hover:bg-[#FDE2E2]'
@@ -278,6 +397,20 @@ export default function Attendance() {
                         >
                           <X size={24} strokeWidth={3} />
                         </button>
+                        {memStatus === 'Active' && (
+                          <button 
+                            onClick={() => handleMarkAttendance(client.id, 'Shake')}
+                            disabled={isLocked}
+                            className={`flex items-center justify-center w-14 h-14 rounded-2xl transition-all duration-500 shadow-sm ${isLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-90'} ${
+                              status === 'Shake' 
+                                ? 'bg-[#D97706] text-white shadow-lg shadow-[#D97706]/20' 
+                                : 'bg-white text-[#D97706] border border-[#FEF08A] hover:bg-[#FEF9C3]'
+                            }`}
+                            title="Mark Shake"
+                          >
+                            <span className="text-xl font-black">S</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -310,6 +443,13 @@ export default function Attendance() {
           onClose={() => setEditingCustomer(null)} 
         />
       )}
+
+      {/* Attendance Calendar Modal */}
+      <AttendanceCalendarModal
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        onDateSelect={handleDateSelect}
+      />
     </div>
   );
 }

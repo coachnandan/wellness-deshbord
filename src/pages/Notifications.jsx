@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Bell, Send, Clock, CheckCircle, AlertTriangle, Search, MessageSquare, User, Calendar, RefreshCw } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
+import { getISTDisplayDate, getISTTimeString } from '../utils/dateUtils';
 
 export default function Notifications() {
   const { notifications, customers, sendWhatsAppAlert, fetchData } = useAppContext();
@@ -48,7 +49,7 @@ export default function Notifications() {
   const filteredLogs = notifications.filter(note => {
     const clientName = note.clients?.name || '';
     const matchName = clientName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchType = note.message_type.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchType = (note.message_type || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchName || matchType;
   });
 
@@ -194,13 +195,13 @@ export default function Notifications() {
                           {log.message_type}
                         </p>
                       </td>
-                      <td className="px-8 py-6">{getStatusBadge(log.status)}</td>
+                      <td className="px-8 py-6">{getStatusBadge(log.sent_status || log.status)}</td>
                       <td className="px-8 py-6 text-right">
                         <div className="flex items-center justify-end text-[10px] font-bold text-muted uppercase tracking-wider">
                           <Calendar size={11} className="mr-1 opacity-50" />
-                          {new Date(log.sent_at).toLocaleDateString('en-IN')} &nbsp;
+                          {new Date(log.sent_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })} &nbsp;
                           <Clock size={11} className="mr-1 opacity-50" />
-                          {new Date(log.sent_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(log.sent_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </td>
                     </tr>

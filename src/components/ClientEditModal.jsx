@@ -5,7 +5,24 @@ import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
 
 export default function ClientEditModal({ customer, onClose }) {
-  const { updateCustomer } = useAppContext();
+  const { updateCustomer, memberships = [] } = useAppContext();
+
+  const getMembershipStatus = (customerId) => {
+    const customerMemberships = memberships.filter(m => m.customerId === customerId);
+    if (customerMemberships.length === 0) return 'Afresh';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const activeAndNotExpired = customerMemberships.find(m => {
+      const expiry = new Date(m.expiryDate);
+      return expiry >= today;
+    });
+
+    return activeAndNotExpired ? 'Active' : 'Expired';
+  };
+
+  const memStatus = getMembershipStatus(customer.id);
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm();
 
   useEffect(() => {
@@ -46,7 +63,7 @@ export default function ClientEditModal({ customer, onClose }) {
       <div className="bg-white rounded-3xl sm:rounded-[3rem] shadow-2xl w-full max-w-2xl border border-white/20 animate-in zoom-in-95 duration-500 my-4 sm:my-8">
         <div className="px-6 py-6 sm:px-10 sm:py-10 border-b border-beige flex items-center justify-between bg-offwhite/50">
           <div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-forest tracking-tight">Edit Client Profile</h2>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-forest tracking-tight">Edit Member Profile</h2>
             <p className="text-sm font-medium text-muted mt-1">Update {customer.name}'s details</p>
           </div>
           <button onClick={onClose} className="p-4 text-muted hover:text-forest transition-colors bg-white rounded-2xl shadow-sm border border-beige">
@@ -75,7 +92,7 @@ export default function ClientEditModal({ customer, onClose }) {
               </div>
               <div>
                 <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Email ID</label>
-                <input {...register("email")} type="email" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. client@example.com" />
+                <input {...register("email")} type="email" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="e.g. member@example.com" />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Date of Birth</label>
@@ -145,6 +162,18 @@ export default function ClientEditModal({ customer, onClose }) {
               <div className="space-y-3">
                 <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referred By</label>
                 <input {...register("referred_by")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/20" placeholder="Name or Source" />
+              </div>
+              <div className="space-y-3 sm:col-span-2">
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Current Membership Status</label>
+                <div className="flex items-center">
+                  <span className={`inline-flex items-center px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                    memStatus === 'Active' ? 'bg-[#DDF5E5] text-[#1F7A45] border-[#DDF5E5]' :
+                    memStatus === 'Afresh' ? 'bg-[#FEF9C3] text-[#A16207] border-[#FEF08A]' :
+                    'bg-[#FDE2E2] text-[#B42318] border-[#FDE2E2]'
+                  }`}>
+                    {memStatus}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
