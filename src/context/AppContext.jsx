@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase, isConfigured } from '../lib/supabaseClient';
-import { getISTDateString } from '../utils/dateUtils';
+import { getISTDateString, getISTTimeString } from '../utils/dateUtils';
 import useRealtime from '../hooks/useRealtime';
 
 const AppContext = createContext();
@@ -332,6 +332,26 @@ export const AppProvider = ({ children }) => {
   };
 
   const addCustomer = async (customerData) => {
+    // --- Duplicate check by mobile number ---
+    const mobile = customerData.mobile_number?.trim();
+    if (mobile) {
+      const { data: existing } = await supabase
+        .from('clients')
+        .select('id, full_name, mobile_number')
+        .eq('mobile_number', mobile)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        console.warn('[addCustomer] Duplicate mobile number found:', mobile, '-> existing ID:', existing[0].id);
+        // Return existing profile without inserting
+        return { duplicate: true, existingId: existing[0].id };
+      }
+    }
+
+    const registrationNow = new Date();
+    const registrationDateIST = getISTDateString(registrationNow);
+    const registrationTimeIST = getISTTimeString(registrationNow);
+    const creatorName = user?.name || user?.email?.split('@')[0] || 'System Admin';
+
     const insertPayload = {
       // New schema fields
       full_name: customerData.full_name,
@@ -343,10 +363,14 @@ export const AppProvider = ({ children }) => {
       dob: customerData.dob || null,
       gender: customerData.gender || null,
       marital_status: customerData.marital_status || null,
-      joining_date: customerData.joining_date || new Date().toISOString().split('T')[0],
+      joining_date: customerData.joining_date || registrationDateIST,
       purpose: customerData.purpose || null,
       member_type: customerData.member_type || null,
       referred_by: customerData.referred_by || null,
+      // Registration tracking (date-wise storage)
+      registration_date: registrationDateIST,
+      registration_time_ist: registrationTimeIST,
+      created_by_name: creatorName,
       // Legacy fields (keep for backward compatibility)
       name: customerData.full_name,
       contact: customerData.mobile_number,
@@ -360,16 +384,7 @@ export const AppProvider = ({ children }) => {
       throw error;
     }
 
-    // Insert attendance record for today (default Absent)
-    const today = new Date().toISOString().split('T')[0];
-    await supabase.from('attendance').insert([
-      {
-        client_id: data[0].id,
-        date: today,
-        status: 'Absent',
-        user_id: user?.id
-      }
-    ]);
+    // No auto-attendance insert - attendance is only created when manually marked
 
     // Insert default membership plan
     const startDate = new Date();
@@ -393,12 +408,6 @@ export const AppProvider = ({ children }) => {
 
     // Update state optimistically
     setCustomers(prev => [parsedClient, ...prev]);
-
-    // Refresh attendance
-    const { data: attData } = await supabase.from('attendance').select('*').eq('date', today).eq('client_id', data[0].id);
-    if (attData && attData.length) {
-      setAttendance(prev => [...prev, ...attData.map(a => ({ ...a, customerId: a.client_id }))]);
-    }
 
     // Refresh memberships
     if (memData && memData.length) {
@@ -628,7 +637,31 @@ export const AppProvider = ({ children }) => {
   };
 
   const addNewMember = async (data) => {
-    console.log("addNewMember entered with data:", data);
+    console.log('[addNewMember] entered with data:', data);
+    console.log('[addNewMember] current user:', { id: user?.id, name: user?.name, email: user?.email });
+
+    // --- Duplicate check by mobile number ---
+    const mobile = data.mobile_number?.trim();
+    if (mobile) {
+      const { data: existing } = await supabase
+        .from('clients')
+        .select('id, full_name, mobile_number')
+        .eq('mobile_number', mobile)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        console.warn('[addNewMember] Duplicate mobile:', mobile, '-> existing ID:', existing[0].id);
+        throw new Error(`Profile already exists for mobile number ${mobile} (${existing[0].full_name}).`);
+      }
+    }
+
+    const registrationNow = new Date();
+    const registrationDateIST = getISTDateString(registrationNow);
+    const registrationTimeIST = getISTTimeString(registrationNow);
+    const creatorName = user?.name || user?.email?.split('@')[0] || 'System Admin';
+
+    // Validate member_type has a valid value (CHECK constraint: Coach | Member)
+    const validMemberTypes = ['Coach', 'Member'];
+    const memberType = validMemberTypes.includes(data.member_type) ? data.member_type : 'Member';
 
     const insertPayload = {
       // New schema fields
@@ -641,35 +674,33 @@ export const AppProvider = ({ children }) => {
       dob: data.dob || null,
       gender: data.gender || null,
       marital_status: data.marital_status || null,
-      joining_date: data.joining_date,
+      joining_date: data.joining_date || registrationDateIST,
       purpose: data.purpose || null,
-      member_type: data.member_type,
+      member_type: memberType,
       referred_by: data.referred_by || null,
-
+      notes: data.notes || null,
+      // Registration tracking (date-wise storage)
+      registration_date: registrationDateIST,
+      registration_time_ist: registrationTimeIST,
+      created_by_name: creatorName,
       // Legacy fields
       name: data.full_name,
       contact: data.mobile_number,
       status: 'Active',
-      created_by: user?.id
+      created_by: user?.id || null
     };
 
+    console.log('[addNewMember] clients insert payload:', insertPayload);
     const { data: clientData, error: clientError } = await supabase.from('clients').insert([insertPayload]).select();
 
     if (clientError) {
-      console.error("addNewMember failed:", clientError);
+      console.error('[addNewMember] CLIENT INSERT FAILED:', clientError);
+      console.error('[addNewMember] Error code:', clientError.code, '| message:', clientError.message, '| details:', clientError.details, '| hint:', clientError.hint);
       throw clientError;
     }
+    console.log('[addNewMember] Client created:', clientData[0]?.id);
 
-    // Insert attendance record for today (default Absent)
-    const today = new Date().toISOString().split('T')[0];
-    await supabase.from('attendance').insert([
-      {
-        client_id: clientData[0].id,
-        date: today,
-        status: 'Absent',
-        user_id: user?.id
-      }
-    ]);
+    // No auto-attendance insert - attendance is only created when manually marked
 
     // Insert membership directly after client creation
     const planMap = {
@@ -682,26 +713,70 @@ export const AppProvider = ({ children }) => {
       'Quarterly Balance': 90,
       'Annual Harmony': 365
     };
-    const amount = planMap[data.plan] || 0;
+    
+    // Auto-calculate payment details
+    const totalAmount = data.total_amount ? parseFloat(data.total_amount) : (planMap[data.plan] || 0);
+    const advanceAmount = data.advance_amount ? parseFloat(data.advance_amount) : totalAmount;
+    const remainingAmount = Math.max(0, (totalAmount || 0) - (advanceAmount || 0));
+    
+    let paymentStatusDetail = 'Pending';
+    if (remainingAmount === 0) {
+      paymentStatusDetail = 'Fully Paid';
+    } else if (remainingAmount > 0 && advanceAmount > 0) {
+      paymentStatusDetail = 'Partially Paid';
+    }
+    
     const duration = durationMap[data.plan] || 30;
-    const startDate = new Date();
-    const expiryDate = new Date();
+    const startDate = data.membership_start_date ? new Date(data.membership_start_date) : new Date();
+    const expiryDate = new Date(startDate);
     expiryDate.setDate(startDate.getDate() + duration);
+    
+    const membershipPayload = {
+      client_id: clientData[0].id,
+      client_name: data.full_name || null,
+      membership_plan: data.plan,
+      duration_days: duration,
+      amount: totalAmount || 0,
+      total_amount: totalAmount || 0,
+      advance_amount: advanceAmount || 0,
+      remaining_amount: remainingAmount || 0,
+      payment_status_detail: paymentStatusDetail,
+      start_date: startDate.toISOString().split('T')[0],
+      expiry_date: expiryDate.toISOString().split('T')[0],
+      status: 'Active',
+      payment_status: paymentStatusDetail === 'Pending' ? 'Pending' : 'Paid',
+      renewal_status: 'New',
+      created_by_user_id: user?.id || null,
+      created_by_name: creatorName
+    };
+    console.log('[addNewMember] memberships insert payload:', membershipPayload);
     const { data: memData, error: memError } = await supabase.from('memberships').insert([
-      {
-        client_id: clientData[0].id,
-        membership_plan: data.plan,
-        duration_days: duration,
-        amount: amount,
-        start_date: startDate.toISOString().split('T')[0],
-        expiry_date: expiryDate.toISOString().split('T')[0],
-        status: 'Active',
-        payment_status: 'Paid',
-        renewal_status: 'New'
-      }
+      membershipPayload
     ]).select();
 
-    if (memError) throw memError;
+    if (memError) {
+      console.error('[addNewMember] MEMBERSHIP INSERT FAILED:', memError);
+      console.error('[addNewMember] Error code:', memError.code, '| message:', memError.message, '| details:', memError.details, '| hint:', memError.hint);
+      // Clean up the orphaned client record
+      await supabase.from('clients').delete().eq('id', clientData[0].id);
+      throw memError;
+    }
+    console.log('[addNewMember] Membership created:', memData[0]?.id);
+
+    // Log Activity - non-fatal if fails
+    const { error: logError } = await supabase.from('membership_activity_logs').insert([
+      {
+        membership_id: memData[0].id,
+        client_id: clientData[0].id,
+        action_type: 'Created',
+        action_description: `Enrolled in ${data.plan}`,
+        performed_by_user_id: user?.id || null,
+        performed_by_name: creatorName
+      }
+    ]);
+    if (logError) {
+      console.warn('[addNewMember] Activity log insert warning (non-fatal):', logError.message);
+    }
 
     const parsedClient = { ...clientData[0] };
 
@@ -721,12 +796,6 @@ export const AppProvider = ({ children }) => {
       const filtered = prev.filter(m => m.id !== `PENDING-${clientData[0].id}`);
       return [newMembership, ...filtered];
     });
-
-    // Refresh attendance
-    const { data: attData } = await supabase.from('attendance').select('*').eq('date', today).eq('client_id', clientData[0].id);
-    if (attData && attData.length) {
-      setAttendance(prev => [...prev, ...attData.map(a => ({ ...a, customerId: a.client_id }))]);
-    }
 
     // Trigger Welcome WhatsApp via Edge Function
     await sendWhatsAppAlert(clientData[0].id, 'Welcome', { plan: memData[0].membership_plan });
@@ -770,20 +839,7 @@ export const AppProvider = ({ children }) => {
     const newClient = clientData[0];
     setCustomers(prev => [newClient, ...prev]);
 
-    // 3. Initialize attendance
-    const today = new Date().toISOString().split('T')[0];
-    const { data: attData } = await supabase.from('attendance').insert([
-      {
-        client_id: newClient.id,
-        date: today,
-        status: 'Absent',
-        user_id: user?.id
-      }
-    ]).select('*, profiles(name)');
-
-    if (attData && attData.length) {
-      setAttendance(prev => [...prev, ...attData.map(a => ({ ...a, customerId: a.client_id, markedBy: a.profiles?.name || a.marked_by_name }))]);
-    }
+    // No auto-attendance insert - attendance is only created when manually marked
 
     // 4. Create membership if provided
     if (membershipData) {
@@ -902,6 +958,68 @@ export const AppProvider = ({ children }) => {
     return { data: updatedData, error: null };
   };
 
+  const updateMembership = async (membershipId, updates, actionType, actionDescription) => {
+    // 1. Update the membership in the database
+    const { data: updatedData, error: updateError } = await supabase
+      .from('memberships')
+      .update(updates)
+      .eq('id', membershipId)
+      .select();
+
+    if (updateError) throw updateError;
+
+    // 2. Insert into activity logs
+    const markerName = user?.name || user?.email?.split('@')[0] || 'System Admin';
+    const clientId = updatedData[0]?.client_id;
+    
+    if (actionType) {
+      await supabase.from('membership_activity_logs').insert([
+        {
+          membership_id: membershipId,
+          client_id: clientId,
+          action_type: actionType,
+          action_description: actionDescription || `Membership updated`,
+          performed_by_user_id: user?.id,
+          performed_by_name: markerName
+        }
+      ]);
+    }
+
+    // 3. Update local state
+    if (updatedData && updatedData[0]) {
+      const mapped = {
+        ...updatedData[0],
+        customerId: updatedData[0].client_id,
+        plan: updatedData[0].membership_plan,
+        startDate: updatedData[0].start_date,
+        expiryDate: updatedData[0].expiry_date
+      };
+      setMemberships(prev => prev.map(m => m.id === membershipId ? mapped : m));
+    }
+    
+    return { data: updatedData, error: null };
+  };
+
+  const fetchMembershipActivityLogs = async (membershipId) => {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('membership_activity_logs')
+        .select('*')
+        .eq('membership_id', membershipId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('fetchMembershipActivityLogs failed:', error);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error('fetchMembershipActivityLogs error:', err);
+      return [];
+    }
+  };
+
   const sendWhatsAppAlert = async (clientId, messageType, extraData = {}) => {
     if (!supabase) return;
     const client = customers.find(c => c.id === clientId);
@@ -980,7 +1098,7 @@ export const AppProvider = ({ children }) => {
       customers, addCustomer, updateCustomer, deleteCustomer,
       visitors, addVisitor, updateVisitor, deleteVisitor,
       attendance, updateAttendance, setAttendance, fetchMonthlyAttendance, attendanceLocks, finalizeAttendance,
-      memberships, addMembership, renewMembership, addNewMember, fetchData, convertVisitorToMember,
+      memberships, addMembership, renewMembership, addNewMember, fetchData, convertVisitorToMember, updateMembership, fetchMembershipActivityLogs,
       notifications, setNotifications, sendWhatsAppAlert,
       dataLoading
     }}>

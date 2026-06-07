@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Plus, Search, Filter, MoreVertical, X, Edit3, Trash2, ChevronLeft, ChevronRight, User as UserIcon, Phone, MapPin, Briefcase, Activity, CreditCard } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, X, Edit3, Trash2, ChevronLeft, ChevronRight, User as UserIcon, Phone, MapPin, Briefcase, Activity, CreditCard, CalendarClock } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
+import { getISTDisplayDate } from '../utils/dateUtils';
 
 export default function Customers() {
   const { customers, addCustomer, updateCustomer, deleteCustomer, dataLoading, addMembership } = useAppContext();
@@ -21,6 +22,7 @@ export default function Customers() {
   });
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
 
@@ -98,7 +100,8 @@ export default function Customers() {
   };
 
   const onSubmit = async (data) => {
-    // Auto-fill whatsapp from mobile if blank
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     if (!data.whatsapp_number) data.whatsapp_number = data.mobile_number;
     console.log('Submitting data:', data);
     try {
@@ -106,14 +109,20 @@ export default function Customers() {
         await updateCustomer(editingCustomer.id, data);
         toast.success('Member profile updated successfully.');
       } else {
-        await addCustomer(data);
-        toast.success('Member Profile Created Successfully.');
+        const result = await addCustomer(data);
+        if (result?.duplicate) {
+          toast.info('Profile already exists for this mobile number.');
+        } else {
+          toast.success('Member Profile Created Successfully.');
+        }
       }
       setIsModalOpen(false);
       reset();
     } catch (error) {
       console.error('Operation failed:', error);
       toast.error(`Error: ${error.message || 'Operation failed. Please check the data.'}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -176,6 +185,7 @@ export default function Customers() {
                 <th className="px-10 py-6">Member Profile</th>
                 <th className="px-10 py-6 hidden md:table-cell">Contact & Location</th>
                 <th className="px-10 py-6 hidden lg:table-cell">Professional Focus</th>
+                <th className="px-10 py-6 hidden xl:table-cell">Registered On</th>
                 <th className="px-10 py-6">Status</th>
                 <th className="px-10 py-6 text-right">Actions</th>
               </tr>
@@ -204,6 +214,9 @@ export default function Customers() {
                         <div className="w-24 h-4 bg-sage/10 rounded"></div>
                         <div className="w-20 h-3 bg-sage/10 rounded"></div>
                       </div>
+                    </td>
+                    <td className="px-10 py-8 hidden xl:table-cell">
+                      <div className="w-24 h-4 bg-sage/10 rounded"></div>
                     </td>
                     <td className="px-10 py-8">
                       <div className="w-16 h-6 bg-sage/10 rounded-xl"></div>
@@ -248,6 +261,26 @@ export default function Customers() {
                       <div className="space-y-1.5">
                         <p className="text-sm font-extrabold text-forest flex items-center"><Briefcase size={14} className="mr-2 text-sage" /> {customer.profession}</p>
                         <p className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center"><Activity size={14} className="mr-2 text-gold" /> {customer.purpose}</p>
+                      </div>
+                    </td>
+                    <td className="px-10 py-8 hidden xl:table-cell">
+                      <div className="space-y-1">
+                        <p className="text-sm font-extrabold text-forest flex items-center">
+                          <CalendarClock size={13} className="mr-2 text-sage shrink-0" />
+                          {customer.registration_date
+                            ? getISTDisplayDate(customer.registration_date)
+                            : (customer.joining_date ? getISTDisplayDate(customer.joining_date) : '—')}
+                        </p>
+                        {customer.registration_time_ist && (
+                          <p className="text-[9px] font-bold text-muted uppercase tracking-widest ml-5">
+                            {customer.registration_time_ist}
+                          </p>
+                        )}
+                        {customer.created_by_name && (
+                          <p className="text-[9px] font-bold text-muted uppercase tracking-widest ml-5">
+                            by {customer.created_by_name}
+                          </p>
+                        )}
                       </div>
                     </td>
                     <td className="px-10 py-8">
@@ -431,8 +464,8 @@ export default function Customers() {
 
               <div className="flex gap-6 pt-6">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-8 py-5 bg-white text-muted border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Discard</button>
-                <button type="submit" className="flex-[2] px-8 py-5 bg-forest text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all shadow-2xl shadow-forest/20">
-                  {editingCustomer ? 'Update Profile' : 'Establish Profile'}
+                <button type="submit" disabled={isSubmitting} className="flex-[2] px-8 py-5 bg-forest text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all shadow-2xl shadow-forest/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmitting ? 'Saving...' : (editingCustomer ? 'Update Profile' : 'Establish Profile')}
                 </button>
               </div>
             </form>

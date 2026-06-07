@@ -68,3 +68,13 @@ export const getDaysDifferenceIST = (futureDateStr) => {
   
   return Math.ceil((future - today) / (1000 * 60 * 60 * 24));
 };
+
+/**
+ * Returns the date of Sunday for the current week based on IST.
+ */
+export const getStartOfWeekIST = (dateInput = new Date()) => {
+  const date = new Date(dateInput);
+  const day = date.getDay();
+  date.setDate(date.getDate() - day);
+  return getISTDateString(date);
+};

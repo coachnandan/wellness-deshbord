@@ -7,24 +7,52 @@ import { supabase } from '../lib/supabaseClient';
 import ClientEditModal from '../components/ClientEditModal';
 
 export default function Memberships() {
-  const { memberships, customers, addMembership, addNewMember, renewMembership, user, sendWhatsAppAlert } = useAppContext();
+  const { memberships, customers, addMembership, addNewMember, renewMembership, updateMembership, fetchMembershipActivityLogs, user, sendWhatsAppAlert } = useAppContext();
   const [filter, setFilter] = useState('All');
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isNewMemberModalOpen, setIsNewMemberModalOpen] = useState(false);
+  const [enrollmentStep, setEnrollmentStep] = useState(1);
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isEditPaymentModalOpen, setIsEditPaymentModalOpen] = useState(false);
+  const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
   const [selectedMembership, setSelectedMembership] = useState(null);
   const [activeMembership, setActiveMembership] = useState(null);
   const [renewalLogs, setRenewalLogs] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
   const [memberAttendance, setMemberAttendance] = useState([]);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
 
   const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-IN');
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, watch, setValue } = useForm({
+    defaultValues: {
+      plan: 'Monthly Flow',
+      total_amount: 15000,
+      advance_amount: 15000
+    }
+  });
+
+  const watchPlan = watch('plan');
+  const watchTotal = watch('total_amount');
+  const watchAdvance = watch('advance_amount');
+
+  // Auto-update total amount when plan changes
+  useMemo(() => {
+    const planMap = {
+      'Monthly Flow': 15000,
+      'Quarterly Balance': 40000,
+      'Annual Harmony': 150000,
+      'Custom': ''
+    };
+    if (watchPlan && watchPlan !== 'Custom') {
+      setValue('total_amount', planMap[watchPlan]);
+      setValue('advance_amount', planMap[watchPlan]);
+    }
+  }, [watchPlan, setValue]);
 
   const filteredMemberships = filter === 'All'
     ? memberships
@@ -53,15 +81,56 @@ export default function Memberships() {
   };
 
   const onSubmitNewMember = async (data) => {
-    console.log("onSubmitNewMember called with data:", data);
+    console.log('[Enrollment] Form payload:', JSON.stringify(data, null, 2));
+
+    // --- Client-side validation ---
+    const missing = [];
+    if (!data.full_name?.trim()) missing.push('Full Legal Name');
+    if (!data.mobile_number?.trim()) missing.push('Mobile Number');
+    if (!data.membership_start_date) missing.push('Membership Start Date');
+    if (!data.plan) missing.push('Membership Plan');
+    if (data.total_amount === undefined || data.total_amount === '' || data.total_amount === null) missing.push('Total Amount');
+    if (!user?.id) missing.push('Created By User ID (not logged in)');
+
+    if (missing.length > 0) {
+      const msg = `Missing required fields: ${missing.join(', ')}`;
+      console.warn('[Enrollment] Validation failed:', msg);
+      toast.error(msg);
+      return;
+    }
+
     try {
-      await addNewMember(data);
-      toast.success('New member enrolled successfully');
+      console.log('[Enrollment] Submitting to addNewMember...');
+      const result = await addNewMember(data);
+      console.log('[Enrollment] Success:', result);
+      toast.success(`Membership enrolled successfully! ID: ${result?.membership?.id?.slice(0, 8) || 'confirmed'}`);
       setIsNewMemberModalOpen(false);
+      setEnrollmentStep(1);
       reset();
     } catch (error) {
-      console.error("onSubmitNewMember error:", error);
-      toast.error('Enrollment failed. Please check the data.');
+      const errMsg = error?.message || error?.error_description || JSON.stringify(error);
+      console.error('[Enrollment] Error object:', error);
+      console.error('[Enrollment] Error message:', errMsg);
+      console.error('[Enrollment] Error details:', error?.details || 'none');
+      console.error('[Enrollment] Error hint:', error?.hint || 'none');
+      console.error('[Enrollment] Error code:', error?.code || 'none');
+
+      // Map common DB errors to friendly messages
+      let displayMsg = errMsg;
+      if (errMsg.includes('duplicate key') || errMsg.includes('23505')) {
+        displayMsg = 'Duplicate membership record. This member may already be enrolled.';
+      } else if (errMsg.includes('foreign key') || errMsg.includes('23503')) {
+        displayMsg = `Invalid reference: ${errMsg.includes('clients') ? 'Member ID not found' : errMsg.includes('profiles') ? 'User profile not found. Contact admin.' : 'Foreign key constraint failed'}`;
+      } else if (errMsg.includes('check_violation') || errMsg.includes('23514')) {
+        displayMsg = `Invalid field value. ${errMsg.includes('member_type') ? 'Member Type must be Coach or Member.' : errMsg.includes('gender') ? 'Gender must be Male, Female, or Other.' : 'Check field values.'}`;
+      } else if (errMsg.includes('new row violates row-level security') || errMsg.includes('42501')) {
+        displayMsg = 'Permission denied. Your account may not have enrollment privileges. Contact admin.';
+      } else if (errMsg.includes('null value in column')) {
+        const colMatch = errMsg.match(/null value in column "([^"]+)"/);
+        displayMsg = colMatch ? `${colMatch[1]} is required but was not provided.` : 'A required field is missing.';
+      }
+
+      toast.error(displayMsg);
     }
   };
 
@@ -88,7 +157,11 @@ export default function Memberships() {
 
     try {
       if (supabase) {
-        // Fetch Renewal Logs
+        // Fetch Activity Logs
+        const logsData = await fetchMembershipActivityLogs(membership.id);
+        setActivityLogs(logsData);
+
+        // Fetch Renewal Logs (legacy, keep if needed or remove, let's keep it for now)
         const { data: logs } = await supabase
           .from('renewal_logs')
           .select('*')
@@ -111,6 +184,75 @@ export default function Memberships() {
       console.error('Error fetching details:', error);
     } finally {
       setIsDetailLoading(false);
+    }
+  };
+
+  const handleUpdatePayment = async (newAdvanceAmount) => {
+    if (!activeMembership) return;
+    try {
+      const totalAmount = activeMembership.total_amount || 0;
+      const advanceAmount = parseFloat(newAdvanceAmount);
+      const remainingAmount = Math.max(0, totalAmount - advanceAmount);
+      let statusDetail = 'Pending';
+      if (remainingAmount === 0) statusDetail = 'Fully Paid';
+      else if (remainingAmount > 0 && advanceAmount > 0) statusDetail = 'Partially Paid';
+      
+      const updates = {
+        advance_amount: advanceAmount,
+        remaining_amount: remainingAmount,
+        payment_status_detail: statusDetail,
+        payment_status: statusDetail === 'Pending' ? 'Pending' : 'Paid'
+      };
+      
+      const { data } = await updateMembership(activeMembership.id, updates, 'PaymentUpdated', `Advance amount updated to ₹${advanceAmount}`);
+      if (data && data[0]) setActiveMembership({ ...activeMembership, ...data[0], customerId: data[0].client_id, plan: data[0].membership_plan, expiryDate: data[0].expiry_date });
+      
+      const logsData = await fetchMembershipActivityLogs(activeMembership.id);
+      setActivityLogs(logsData);
+      
+      toast.success('Payment details updated');
+      setIsEditPaymentModalOpen(false);
+    } catch (error) {
+      toast.error('Failed to update payment');
+      console.error(error);
+    }
+  };
+
+  const handleChangePlan = async (newPlanData) => {
+    if (!activeMembership) return;
+    try {
+      const planMap = {
+        'Monthly Flow': 15000,
+        'Quarterly Balance': 40000,
+        'Annual Harmony': 150000
+      };
+      const totalAmount = newPlanData.total_amount !== undefined ? parseFloat(newPlanData.total_amount) : (planMap[newPlanData.plan] || 0);
+      const advanceAmount = parseFloat(activeMembership.advance_amount || 0);
+      const remainingAmount = Math.max(0, totalAmount - advanceAmount);
+      let statusDetail = 'Pending';
+      if (remainingAmount === 0) statusDetail = 'Fully Paid';
+      else if (remainingAmount > 0 && advanceAmount > 0) statusDetail = 'Partially Paid';
+
+      const updates = {
+        membership_plan: newPlanData.plan,
+        amount: totalAmount,
+        total_amount: totalAmount,
+        remaining_amount: remainingAmount,
+        payment_status_detail: statusDetail,
+        payment_status: statusDetail === 'Pending' ? 'Pending' : 'Paid'
+      };
+
+      const { data } = await updateMembership(activeMembership.id, updates, 'PlanChanged', `Plan changed to ${newPlanData.plan}`);
+      if (data && data[0]) setActiveMembership({ ...activeMembership, ...data[0], customerId: data[0].client_id, plan: data[0].membership_plan, expiryDate: data[0].expiry_date });
+      
+      const logsData = await fetchMembershipActivityLogs(activeMembership.id);
+      setActivityLogs(logsData);
+
+      toast.success('Membership plan changed');
+      setIsChangePlanModalOpen(false);
+    } catch (error) {
+      toast.error('Failed to change plan');
+      console.error(error);
     }
   };
 
@@ -400,6 +542,12 @@ export default function Memberships() {
             </div>
 
             <form onSubmit={handleSubmit(onSubmitNewMember, (err) => console.log("Form validation errors:", err))} className="p-10 sm:p-14 space-y-10">
+              <div className="flex mb-8 space-x-2">
+                {[1, 2, 3].map(step => (
+                  <div key={step} className={`flex-1 h-2 rounded-full ${enrollmentStep >= step ? 'bg-forest' : 'bg-beige'}`} />
+                ))}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Profile Section */}
                 <div className="md:col-span-1 space-y-6">
@@ -418,66 +566,177 @@ export default function Memberships() {
 
                 {/* Fields Section */}
                 <div className="md:col-span-2 space-y-10">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Full Legal Name</label>
-                      <input {...register("full_name", { required: "Full name is required" })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="e.g. Rahul Sharma" />
+                  {enrollmentStep === 1 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                      <div className="space-y-2 md:col-span-2">
+                        <h3 className="text-sm font-extrabold text-forest mb-2">Step 1: Visitor Details</h3>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Full Legal Name</label>
+                        <input {...register("full_name", { required: "Full name is required" })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="e.g. Rahul Sharma" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Mobile Number</label>
+                        <input {...register("mobile_number", { required: "Mobile number is required" })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="+91 00000 00000" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">WhatsApp Number</label>
+                        <input {...register("whatsapp_number")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="+91 00000 00000" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Gender</label>
+                        <select {...register("gender")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
+                          <option value="">Select Gender</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Age</label>
+                        <input type="number" {...register("age")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Age" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Visit Purpose</label>
+                        <select {...register("purpose")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
+                          <option value="Weight Loss">Weight Loss</option>
+                          <option value="Weight Gain">Weight Gain</option>
+                          <option value="Yoga">Yoga</option>
+                          <option value="Meditation">Meditation</option>
+                          <option value="Fitness">Fitness</option>
+                          <option value="Health & Vitality">Health & Vitality</option>
+                          <option value="Stress Management">Stress Management</option>
+                          <option value="General Wellness">General Wellness</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Living Address</label>
+                        <input {...register("address")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Street, City, State, Zip" />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Notes</label>
+                        <textarea {...register("notes")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Any initial observations" rows={2} />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Contact Number</label>
-                      <input {...register("mobile_number", { required: "Mobile number is required" })} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="+91 00000 00000" />
+                  )}
+
+                  {enrollmentStep === 2 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                      <div className="space-y-2 md:col-span-2">
+                        <h3 className="text-sm font-extrabold text-forest mb-2">Step 2: Member Details</h3>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Email</label>
+                        <input type="email" {...register("email")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Email Address" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Date of Birth</label>
+                        <input type="date" {...register("dob")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Marital Status</label>
+                        <select {...register("marital_status")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
+                          <option value="">Select</option>
+                          <option value="Single">Single</option>
+                          <option value="Married">Married</option>
+                          <option value="Divorced">Divorced</option>
+                          <option value="Widowed">Widowed</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Profession</label>
+                        <input {...register("profession")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="e.g. Design Architect" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Member Type</label>
+                        <select {...register("member_type")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
+                          <option value="Member">Member</option>
+                          <option value="Coach">Coach</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referred By</label>
+                        <input {...register("referred_by")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Name or Source" />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Joining Date</label>
+                        <input {...register("joining_date")} type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" />
+                      </div>
                     </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Living Address</label>
-                      <input {...register("address")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Street, City, State, Zip" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Primary Goal</label>
-                      <select {...register("purpose")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
-                        <option value="Weight Loss">Weight Loss</option>
-                        <option value="Weight Gain">Weight Gain</option>
-                        <option value="Yoga">Yoga</option>
-                        <option value="Meditation">Meditation</option>
-                        <option value="Fitness">Fitness</option>
-                        <option value="Health & Vitality">Health & Vitality</option>
-                        <option value="Stress Management">Stress Management</option>
-                        <option value="General Wellness">General Wellness</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Profession</label>
-                      <input {...register("profession")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="e.g. Design Architect" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Referred By</label>
-                      <input {...register("referred_by")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all placeholder-muted/30" placeholder="Name or Source" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Member Type</label>
-                      <select {...register("member_type")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
-                        <option value="Member">Member</option>
-                        <option value="Coach">Coach</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Joining Date</label>
-                      <input {...register("joining_date")} type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" />
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Engagement Plan</label>
-                      <select {...register("plan")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
-                        <option value="Monthly Flow">Monthly Flow (₹15,000)</option>
-                        <option value="Quarterly Balance">Quarterly Balance (₹40,000)</option>
-                        <option value="Annual Harmony">Annual Harmony (₹1,50,000)</option>
-                      </select>
-                    </div>
-                  </div>
+                  )}
+
+                  {enrollmentStep === 3 && (() => {
+                    const tAmt = parseFloat(watchTotal) || 0;
+                    const aAmt = parseFloat(watchAdvance) || 0;
+                    const rAmt = Math.max(0, tAmt - aAmt);
+                    let statusBadge = 'Pending';
+                    let badgeColor = 'bg-[#FEF9C3] text-[#A16207] border-[#FEF08A]';
+                    if (rAmt === 0) {
+                      statusBadge = 'Fully Paid';
+                      badgeColor = 'bg-[#DDF5E5] text-[#1F7A45] border-[#DDF5E5]';
+                    } else if (rAmt > 0 && aAmt > 0) {
+                      statusBadge = 'Partially Paid';
+                      badgeColor = 'bg-offwhite text-sage border-sage/20';
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                        <div className="space-y-2 md:col-span-2">
+                          <h3 className="text-sm font-extrabold text-forest mb-2">Step 3: Membership & Payment</h3>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Membership Start Date</label>
+                          <input {...register("membership_start_date")} type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Active Plan</label>
+                          <select {...register("plan")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
+                            <option value="Monthly Flow">Monthly Flow (₹15,000)</option>
+                            <option value="Quarterly Balance">Quarterly Balance (₹40,000)</option>
+                            <option value="Annual Harmony">Annual Harmony (₹1,50,000)</option>
+                            <option value="Custom">Custom Plan</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Total Amount (₹)</label>
+                          <input type="number" {...register("total_amount")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" placeholder="Total Amount" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Advance Amount (₹)</label>
+                          <input type="number" {...register("advance_amount")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" placeholder="Advance Received" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Remaining Amount (₹)</label>
+                          <div className="w-full px-6 py-4 bg-offwhite/50 border border-beige rounded-2xl font-extrabold text-forest outline-none cursor-not-allowed">
+                            {rAmt.toLocaleString('en-IN')}
+                          </div>
+                        </div>
+                        <div className="space-y-2 flex flex-col justify-center pt-5">
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Payment Status</label>
+                          <div>
+                            <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border transition-all ${badgeColor}`}>
+                              {statusBadge}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-6 pt-10 border-t border-beige">
-                <button type="button" onClick={() => setIsNewMemberModalOpen(false)} className="flex-1 px-10 py-5 bg-white text-muted border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Discard Entry</button>
-                <button type="submit" className="flex-[2] px-10 py-5 bg-forest text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all shadow-2xl shadow-forest/20 active:scale-95">Complete Enrollment</button>
+                {enrollmentStep > 1 ? (
+                  <button type="button" onClick={() => setEnrollmentStep(e => e - 1)} className="flex-1 px-10 py-5 bg-white text-forest border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Previous</button>
+                ) : (
+                  <button type="button" onClick={() => { setIsNewMemberModalOpen(false); setEnrollmentStep(1); reset(); }} className="flex-1 px-10 py-5 bg-white text-muted border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Discard Entry</button>
+                )}
+                
+                {enrollmentStep < 3 ? (
+                  <button type="button" onClick={() => setEnrollmentStep(e => e + 1)} className="flex-[2] px-10 py-5 bg-forest text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all shadow-xl shadow-forest/20 active:scale-95">Next Step</button>
+                ) : (
+                  <button type="submit" className="flex-[2] px-10 py-5 bg-forest text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all shadow-2xl shadow-forest/20 active:scale-95">Complete Enrollment</button>
+                )}
               </div>
             </form>
           </div>
@@ -587,6 +846,20 @@ export default function Memberships() {
                           <MessageSquare size={20} className="mb-2 text-emerald group-hover:text-white" />
                           <span className="text-[8px] font-black uppercase tracking-widest">Send Alert</span>
                         </button>
+                        <button
+                          onClick={() => setIsEditPaymentModalOpen(true)}
+                          className="flex flex-col items-center justify-center p-6 bg-offwhite border border-beige rounded-2xl hover:bg-forest hover:text-white transition-all group"
+                        >
+                          <DollarSign size={20} className="mb-2 text-forest group-hover:text-white" />
+                          <span className="text-[8px] font-black uppercase tracking-widest">Edit Payment</span>
+                        </button>
+                        <button
+                          onClick={() => setIsChangePlanModalOpen(true)}
+                          className="flex flex-col items-center justify-center p-6 bg-offwhite border border-beige rounded-2xl hover:bg-sage hover:text-white transition-all group"
+                        >
+                          <Edit3 size={20} className="mb-2 text-sage group-hover:text-white" />
+                          <span className="text-[8px] font-black uppercase tracking-widest">Change Plan</span>
+                        </button>
                       </div>
                     </section>
                   </div>
@@ -613,12 +886,20 @@ export default function Memberships() {
                           </div>
                           <div className="grid grid-cols-2 gap-6">
                             <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Investment</p>
-                              <p className="text-lg font-extrabold text-sage">₹{activeMembership.amount?.toLocaleString('en-IN')}</p>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Total</p>
+                              <p className="text-lg font-extrabold text-sage">₹{activeMembership.total_amount?.toLocaleString('en-IN') || activeMembership.amount?.toLocaleString('en-IN')}</p>
                             </div>
                             <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Payment Status</p>
-                              <p className="text-lg font-extrabold text-forest">{activeMembership.payment_status || 'Paid'}</p>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Advance</p>
+                              <p className="text-lg font-extrabold text-forest">₹{activeMembership.advance_amount?.toLocaleString('en-IN') || activeMembership.amount?.toLocaleString('en-IN')}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Remaining</p>
+                              <p className="text-lg font-extrabold text-red-500">₹{activeMembership.remaining_amount?.toLocaleString('en-IN') || 0}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Status</p>
+                              <p className="text-sm font-extrabold text-forest">{activeMembership.payment_status_detail || activeMembership.payment_status || 'Paid'}</p>
                             </div>
                           </div>
                         </div>
@@ -655,23 +936,24 @@ export default function Memberships() {
                             <div className="p-2 bg-offwhite rounded-lg border border-beige">
                               <History size={16} className="text-sage" />
                             </div>
-                            <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Renewal Flow</h3>
+                            <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Activity Audit Log</h3>
                           </div>
                         </div>
-                        <div className="space-y-4">
-                          {renewalLogs.length > 0 ? renewalLogs.map((log, i) => (
-                            <div key={i} className="flex items-center justify-between p-4 bg-offwhite/40 rounded-xl border border-beige/40">
-                              <div>
-                                <p className="text-[10px] font-bold text-forest">{new Date(log.renewed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                                <p className="text-[8px] font-black text-muted uppercase tracking-widest mt-0.5">Extended Journey</p>
+                        <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
+                          {activityLogs.length > 0 ? activityLogs.map((log, i) => (
+                            <div key={i} className="flex flex-col p-4 bg-offwhite/40 rounded-xl border border-beige/40">
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="px-2 py-1 bg-white border border-beige rounded text-[8px] font-black uppercase tracking-widest text-forest">
+                                  {log.action_type}
+                                </span>
+                                <p className="text-[9px] font-bold text-muted">{new Date(log.created_at).toLocaleString('en-IN')}</p>
                               </div>
-                              <div className="text-right">
-                                <p className="text-[10px] font-black text-sage uppercase">SUCCESS</p>
-                              </div>
+                              <p className="text-sm font-bold text-forest mb-1">{log.action_description}</p>
+                              <p className="text-[9px] font-black text-sage uppercase tracking-widest">By: {log.performed_by_name}</p>
                             </div>
                           )) : (
                             <div className="py-10 text-center bg-offwhite/20 rounded-2xl border border-dashed border-beige">
-                              <p className="text-[10px] font-black text-muted uppercase tracking-widest">No renewal history</p>
+                              <p className="text-[10px] font-black text-muted uppercase tracking-widest">No activity history</p>
                             </div>
                           )}
                         </div>
@@ -734,6 +1016,76 @@ export default function Memberships() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payment Modal */}
+      {isEditPaymentModalOpen && (
+        <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-[60] flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 border border-white/20">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-extrabold text-forest">Update Payment</h3>
+              <button onClick={() => setIsEditPaymentModalOpen(false)} className="text-muted hover:text-forest">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdatePayment(e.target.advance_amount.value);
+            }} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">Total Amount</label>
+                <input type="number" disabled value={activeMembership?.total_amount || activeMembership?.amount || 0} className="w-full px-4 py-3 bg-offwhite/50 border border-beige rounded-xl font-bold text-forest" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">Advance Paid (₹)</label>
+                <input type="number" name="advance_amount" defaultValue={activeMembership?.advance_amount || activeMembership?.amount || 0} className="w-full px-4 py-3 bg-offwhite border border-beige rounded-xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20" />
+              </div>
+              <button type="submit" className="w-full py-4 bg-forest text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all">Save Payment</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Plan Modal */}
+      {isChangePlanModalOpen && (
+        <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-[60] flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 border border-white/20">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-extrabold text-forest">Change Plan</h3>
+              <button onClick={() => setIsChangePlanModalOpen(false)} className="text-muted hover:text-forest">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleChangePlan({
+                plan: e.target.plan.value,
+                total_amount: e.target.total_amount ? e.target.total_amount.value : undefined
+              });
+            }} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">New Plan</label>
+                <select name="plan" defaultValue={activeMembership?.plan} onChange={(e) => {
+                  const el = document.getElementById('changePlanTotal');
+                  if(el) {
+                    const planMap = { 'Monthly Flow': 15000, 'Quarterly Balance': 40000, 'Annual Harmony': 150000 };
+                    if(planMap[e.target.value]) el.value = planMap[e.target.value];
+                  }
+                }} className="w-full px-4 py-3 bg-offwhite border border-beige rounded-xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20">
+                  <option value="Monthly Flow">Monthly Flow (₹15,000)</option>
+                  <option value="Quarterly Balance">Quarterly Balance (₹40,000)</option>
+                  <option value="Annual Harmony">Annual Harmony (₹1,50,000)</option>
+                  <option value="Custom">Custom</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">Total Amount (₹)</label>
+                <input id="changePlanTotal" type="number" name="total_amount" defaultValue={activeMembership?.total_amount || activeMembership?.amount || 0} className="w-full px-4 py-3 bg-offwhite border border-beige rounded-xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20" />
+              </div>
+              <button type="submit" className="w-full py-4 bg-sage text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald transition-all">Update Plan</button>
+            </form>
           </div>
         </div>
       )}

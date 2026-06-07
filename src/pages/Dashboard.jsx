@@ -7,6 +7,7 @@ import {
   Activity,
   UserPlus,
   Clock,
+  Phone,
   ChevronRight
 } from 'lucide-react';
 import {
@@ -16,7 +17,7 @@ import {
 import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
 import ClientEditModal from '../components/ClientEditModal';
-import { getISTDateString } from '../utils/dateUtils';
+import { getISTDateString, getStartOfWeekIST } from '../utils/dateUtils';
 
 const KPICard = ({ title, value, icon: Icon, trend, trendValue, accentColor }) => (
   <div className="luxury-card p-6 sm:p-8 flex flex-col justify-between h-full">
@@ -47,40 +48,34 @@ export default function Dashboard() {
     return () => clearTimeout(id);
   }, []);
 
-  // New visitors = customers who joined in the last 7 days
-  const newVisitors = customers.filter(c => {
-    const joinDate = new Date(c.joining_date || c.joiningDate || c.created_at);
-    return joinDate >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  });
+  // Today's visitors from visitor_logs table
+  const todayStr = getISTDateString();
+  const todayVisitors = visitors.filter(v => v.visit_date === todayStr);
 
   // Basic aggregations
   const totalCustomers = customers.length;
   const activeMemberships = memberships.filter(m => m.status === 'Active').length;
   
-  const todayStr = getISTDateString();
   const todayAttendance = attendance.filter(a => a.date === todayStr && a.status === 'Present').length;
   const todayShakes = attendance.filter(a => a.date === todayStr && a.status === 'Shake').length;
   const pendingRenewals = memberships.filter(m => m.status === 'Pending').length;
   
-  // Visitors from dedicated visitor_logs table
-  const todayVisitorCount = visitors.filter(v => v.visit_date === todayStr).length;
-
   // Net Revenue
   const revenue = memberships
     .filter(m => m.payment_status === 'Paid' || m.paymentStatus === 'Paid')
     .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
 
-  // Dynamic Attendance Flow (Last 7 days)
+  // Dynamic Attendance Flow (Current Week)
   const getWeeklyAttendanceData = () => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const data = days.map(day => ({ name: day, present: 0, absent: 0, shake: 0 }));
 
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const todayStr = getISTDateString();
+    const startOfWeekStr = getStartOfWeekIST(todayStr);
 
     attendance.forEach(att => {
-      const attDate = new Date(att.date);
-      if (attDate >= oneWeekAgo) {
+      if (att.date >= startOfWeekStr && att.date <= todayStr) {
+        const attDate = new Date(att.date);
         const dayName = days[attDate.getDay()];
         const dayObj = data.find(d => d.name === dayName);
         if (dayObj) {
@@ -146,7 +141,7 @@ export default function Dashboard() {
         <KPICard title="Total Member" value={renderCardValue(totalCustomers)} icon={Users} accentColor="text-sage" trend="up" trendValue="12" />
         <KPICard title="Attendance" value={renderCardValue(todayAttendance)} icon={CalendarCheck} accentColor="text-sage" trend="up" trendValue="4" />
         <KPICard title="Shake" value={renderCardValue(todayShakes)} icon={Activity} accentColor="text-sage" />
-        <KPICard title="Visitors Today" value={renderCardValue(todayVisitorCount)} icon={UserPlus} accentColor="text-sage" />
+        <KPICard title="Visitors Today" value={renderCardValue(todayVisitors.length)} icon={UserPlus} accentColor="text-sage" />
       </div>
 
       {/* Charts */}
@@ -268,10 +263,10 @@ export default function Dashboard() {
 
         <div className="luxury-card overflow-hidden">
           <div className="px-8 py-8 border-b border-beige flex items-center justify-between">
-            <h3 className="text-xl font-extrabold text-forest tracking-tight">New Visitor</h3>
-            <button className="text-[10px] font-black text-gold uppercase tracking-[0.2em] hover:text-forest transition-colors flex items-center">
-              View All <ChevronRight size={14} className="ml-1" />
-            </button>
+            <h3 className="text-xl font-extrabold text-forest tracking-tight">New Visitors Today</h3>
+            <span className="px-3 py-1.5 bg-gold/10 text-gold text-[10px] font-black uppercase tracking-widest rounded-lg border border-gold/20">
+              {todayVisitors.length} {todayVisitors.length === 1 ? 'Visitor' : 'Visitors'}
+            </span>
           </div>
           <div className="divide-y divide-beige/50">
             {dataLoading ? (
@@ -287,29 +282,48 @@ export default function Dashboard() {
                   <div className="w-12 h-6 bg-sage/10 rounded-xl"></div>
                 </div>
               ))
-            ) : newVisitors.length === 0 ? (
-              <div className="px-8 py-10 text-center text-muted font-medium">No one has arrived</div>
+            ) : todayVisitors.length === 0 ? (
+              <div className="px-8 py-12 text-center">
+                <div className="w-16 h-16 bg-offwhite rounded-full flex items-center justify-center mx-auto mb-4 border border-beige">
+                  <UserPlus size={24} className="text-muted/40" />
+                </div>
+                <p className="text-forest font-extrabold text-lg">No New Visitors Today</p>
+                <p className="text-muted text-sm mt-2">Walk-in visitors will appear here automatically.</p>
+              </div>
             ) : (
-              newVisitors.slice(-4).reverse().map((visitor) => (
-                <div key={visitor.id} className="px-8 py-6 flex items-center justify-between hover:bg-offwhite transition-colors group">
+              todayVisitors.slice(0, 6).map((visitor) => (
+                <div key={visitor.id} className="px-8 py-5 flex items-center justify-between hover:bg-offwhite transition-colors group">
                   <div className="flex items-center">
-                    <div className="w-12 h-12 rounded-2xl bg-offwhite border border-beige text-forest flex items-center justify-center font-black text-base mr-4 transition-all group-hover:scale-110 group-hover:bg-forest group-hover:text-white group-hover:border-forest shadow-sm">
-                      {visitor?.name?.charAt(0) || '?'}
+                    <div className="w-11 h-11 rounded-2xl bg-offwhite border border-beige text-forest flex items-center justify-center font-black text-sm mr-4 transition-all group-hover:scale-110 group-hover:bg-forest group-hover:text-white group-hover:border-forest shadow-sm">
+                      {visitor.visitor_name?.charAt(0) || '?'}
                     </div>
                     <div>
-                      <p
-                        onClick={() => visitor && setEditingCustomer(visitor)}
-                        className="text-base font-extrabold text-forest cursor-pointer hover:text-sage transition-colors"
-                      >
-                        {visitor?.name || 'Unknown'}
+                      <p className="text-sm font-extrabold text-forest leading-tight">
+                        {visitor.visitor_name || 'Unknown'}
                       </p>
-                      <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em] mt-1">{visitor?.address?.split(',')[0] || 'Unknown Location'}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        {visitor.mobile_number && (
+                          <p className="text-[10px] font-bold text-muted flex items-center">
+                            <Phone size={9} className="mr-1 text-sage" />{visitor.mobile_number}
+                          </p>
+                        )}
+                        {visitor.visit_time && (
+                          <p className="text-[10px] font-bold text-muted flex items-center">
+                            <Clock size={9} className="mr-1 text-gold" />{visitor.visit_time}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest bg-emerald/10 text-emerald border border-emerald/20">
-                      {visitor.status}
-                    </span>
+                    {visitor.purpose && (
+                      <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest bg-sage/10 text-forest border border-sage/20">
+                        {visitor.purpose}
+                      </span>
+                    )}
+                    {visitor.added_by_name && (
+                      <p className="text-[9px] font-bold text-muted mt-1">by {visitor.added_by_name}</p>
+                    )}
                   </div>
                 </div>
               ))

@@ -27,7 +27,7 @@ import { useAppContext } from '../context/AppContext';
 import { toast } from 'react-toastify';
 import ClientEditModal from '../components/ClientEditModal';
 import AttendanceCalendarModal from '../components/AttendanceCalendarModal';
-import { getISTDateString, getISTTimeString, getISTDisplayDate } from '../utils/dateUtils';
+import { getISTDateString, getISTTimeString, getISTDisplayDate, getStartOfWeekIST } from '../utils/dateUtils';
 
 export default function Attendance() {
   const { attendance = [], customers = [], memberships = [], attendanceLocks = [], updateAttendance, finalizeAttendance } = useAppContext();
@@ -53,17 +53,17 @@ export default function Attendance() {
     shakes: selectedAttendance.filter(a => a.status === 'Shake').length || 0
   };
 
-  // Dynamic weekly flow chart — last 7 days real attendance data
+  // Dynamic weekly flow chart — current week only
   const getWeeklyFlowData = () => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const data = days.map(day => ({ day, present: 0, absent: 0, shake: 0 }));
 
-    const oneWeekAgo = new Date(getISTDateString());
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const todayStr = getISTDateString();
+    const startOfWeekStr = getStartOfWeekIST(todayStr);
 
     attendance.forEach(att => {
-      const attDate = new Date(att.date);
-      if (attDate >= oneWeekAgo) {
+      if (att.date >= startOfWeekStr && att.date <= todayStr) {
+        const attDate = new Date(att.date);
         const dayName = days[attDate.getDay()];
         const dayObj = data.find(d => d.day === dayName);
         if (dayObj) {
