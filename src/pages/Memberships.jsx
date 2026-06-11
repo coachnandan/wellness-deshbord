@@ -744,16 +744,16 @@ export default function Memberships() {
       )}
       {/* Member Detail Modal */}
       {isDetailModalOpen && activeMembership && (
-        <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6 lg:p-10 overflow-y-auto no-scrollbar">
-          <div className="bg-white rounded-[2.5rem] sm:rounded-[3.5rem] shadow-2xl w-full max-w-6xl overflow-hidden border border-white/20 animate-in fade-in slide-in-from-bottom-10 duration-700 my-auto">
+        <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-[55] flex items-center justify-center p-4 sm:p-6 lg:p-8 overflow-y-auto no-scrollbar">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden border border-white/20 animate-in fade-in slide-in-from-bottom-6 duration-500 my-auto">
             {/* Header */}
-            <div className="px-8 sm:px-14 py-10 border-b border-beige flex items-center justify-between bg-offwhite/50">
-              <div className="flex items-center space-x-6">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-[1.75rem] bg-forest text-white flex items-center justify-center text-2xl font-black shadow-2xl shadow-forest/20">
+            <div className="px-5 sm:px-8 py-6 sm:py-8 border-b border-beige flex items-center justify-between bg-offwhite/50">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl bg-forest text-white flex items-center justify-center text-lg sm:text-xl font-black shadow-lg shadow-forest/20">
                   {customers.find(c => c.id === activeMembership.customerId)?.name?.charAt(0) || '?'}
                 </div>
                 <div>
-                  <h2 className="text-2xl sm:text-4xl font-extrabold text-forest tracking-tight">
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-forest tracking-tight">
                     {customers.find(c => c.id === activeMembership.customerId)?.name || 'Practitioner Profile'}
                   </h2>
                   <div className="flex flex-wrap items-center gap-3 mt-2">
@@ -783,16 +783,16 @@ export default function Memberships() {
               </button>
             </div>
 
-            <div className="p-8 sm:p-14">
+            <div className="p-5 sm:p-8">
               {isDetailLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                <div className="flex flex-col items-center justify-center py-16 space-y-4">
                   <div className="w-12 h-12 border-4 border-sage/20 border-t-sage rounded-full animate-spin"></div>
                   <p className="text-[10px] font-black text-muted uppercase tracking-widest">Gathering wellness metrics...</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
                   {/* Left Column: Client Info */}
-                  <div className="lg:col-span-1 space-y-10">
+                  <div className="lg:col-span-1 space-y-6">
                     <section>
                       <div className="flex items-center space-x-3 mb-6">
                         <div className="p-2 bg-offwhite rounded-lg border border-beige">
@@ -800,7 +800,7 @@ export default function Memberships() {
                         </div>
                         <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Client Information</h3>
                       </div>
-                      <div className="bg-offwhite/40 border border-beige rounded-[2rem] p-8 space-y-6">
+                      <div className="bg-offwhite/40 border border-beige rounded-xl p-5 space-y-4">
                         {[
                           { icon: <Phone size={14} />, label: 'Contact', value: customers.find(c => c.id === activeMembership.customerId)?.contact },
                           { icon: <Smartphone size={14} />, label: 'WhatsApp', value: customers.find(c => c.id === activeMembership.customerId)?.whatsapp_number || customers.find(c => c.id === activeMembership.customerId)?.contact },
@@ -865,7 +865,7 @@ export default function Memberships() {
                   </div>
 
                   {/* Right Column: Membership & History */}
-                  <div className="lg:col-span-2 space-y-12">
+                  <div className="lg:col-span-2 space-y-6 sm:space-y-8">
                     <section>
                       <div className="flex items-center space-x-3 mb-6">
                         <div className="p-2 bg-offwhite rounded-lg border border-beige">
@@ -873,15 +873,15 @@ export default function Memberships() {
                         </div>
                         <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Membership Architecture</h3>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                        <div className="bg-white border border-beige rounded-[2rem] p-8 shadow-sm">
-                          <div className="flex items-center justify-between mb-8">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        <div className="bg-white border border-beige rounded-xl p-5 shadow-sm">
+                          <div className="flex items-center justify-between mb-5">
                             <div>
                               <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Active Plan</p>
-                              <p className="text-2xl font-black text-forest">{activeMembership.plan}</p>
+                              <p className="text-xl font-black text-forest">{activeMembership.plan}</p>
                             </div>
-                            <div className="w-14 h-14 bg-offwhite rounded-2xl flex items-center justify-center text-forest border border-beige shadow-sm">
-                              <CreditCard size={24} />
+                            <div className="w-11 h-11 bg-offwhite rounded-xl flex items-center justify-center text-forest border border-beige shadow-sm">
+                              <CreditCard size={20} />
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-6">
@@ -903,16 +903,16 @@ export default function Memberships() {
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white border border-beige rounded-[2rem] p-8 shadow-sm">
-                          <div className="flex items-center justify-between mb-8">
+                        <div className="bg-white border border-beige rounded-xl p-5 shadow-sm">
+                          <div className="flex items-center justify-between mb-5">
                             <div>
                               <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Journey Validity</p>
-                              <p className="text-2xl font-black text-forest">
+                              <p className="text-xl font-black text-forest">
                                 {Math.ceil((new Date(activeMembership.expiryDate || new Date()) - new Date()) / (1000 * 60 * 60 * 24))} Days
                               </p>
                             </div>
-                            <div className="w-14 h-14 bg-offwhite rounded-2xl flex items-center justify-center text-gold border border-beige shadow-sm">
-                              <Clock size={24} />
+                            <div className="w-11 h-11 bg-offwhite rounded-xl flex items-center justify-center text-gold border border-beige shadow-sm">
+                              <Clock size={20} />
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-6">
@@ -929,7 +929,7 @@ export default function Memberships() {
                       </div>
                     </section>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-12">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
                       <section>
                         <div className="flex items-center justify-between mb-6">
                           <div className="flex items-center space-x-3">
@@ -990,13 +990,13 @@ export default function Memberships() {
                       </section>
                     </div>
 
-                    <div className="p-8 bg-forest rounded-[2.5rem] text-white shadow-2xl shadow-forest/20 relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform">
-                        <Sparkles size={120} />
+                    <div className="p-5 sm:p-6 bg-forest rounded-xl text-white shadow-xl shadow-forest/20 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                        <Sparkles size={80} />
                       </div>
                       <div className="relative z-10">
-                        <h4 className="text-xl font-extrabold tracking-tight mb-2">Internal Metadata</h4>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 mt-6">
+                        <h4 className="text-lg font-extrabold tracking-tight mb-2">Internal Metadata</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6 mt-4">
                           <div>
                             <p className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em] mb-1">Enrolled By</p>
                             <p className="text-xs font-bold">{activeMembership.added_by || 'System Admin'}</p>

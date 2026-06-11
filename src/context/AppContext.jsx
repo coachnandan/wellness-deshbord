@@ -598,25 +598,36 @@ export const AppProvider = ({ children }) => {
   const addMembership = async (membershipData) => {
     const markerName = user?.name || user?.email?.split('@')[0] || 'System Admin';
     const clientName = customers.find(c => c.id === membershipData.customerId)?.name || membershipData.customerName || 'Unknown';
+    
+    const insertPayload = {
+      client_id: membershipData.customerId,
+      client_name: clientName,
+      membership_plan: membershipData.plan,
+      duration_days: membershipData.durationDays || 30,
+      amount: membershipData.amount,
+      start_date: membershipData.startDate,
+      expiry_date: membershipData.expiryDate || new Date(Date.now() + (membershipData.durationDays || 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      status: 'Active',
+      payment_status: 'Paid',
+      renewal_status: 'New',
+      created_by_user_id: user?.id || null,
+      created_by_name: markerName
+    };
+    
+    console.log('[addMembership] Insert payload:', insertPayload);
     const { data, error } = await supabase
       .from('memberships')
-      .insert([{
-        client_id: membershipData.customerId,
-        client_name: clientName,
-        membership_plan: membershipData.plan,
-        duration_days: membershipData.durationDays || 30,
-        amount: membershipData.amount,
-        start_date: membershipData.startDate,
-        expiry_date: membershipData.expiryDate || new Date(Date.now() + (membershipData.durationDays || 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        status: 'Active',
-        payment_status: 'Paid',
-        renewal_status: 'New',
-        created_by_user_id: user?.id,
-        created_by_name: markerName
-      }])
+      .insert([insertPayload])
       .select();
 
-    if (!error && data && data.length > 0) {
+    if (error) {
+      console.error('[addMembership] INSERT FAILED:', error);
+      console.error('[addMembership] Code:', error.code, '| Message:', error.message, '| Details:', error.details, '| Hint:', error.hint);
+      throw error;
+    }
+
+    if (data && data.length > 0) {
+      console.log('[addMembership] Created:', data[0].id);
       const normalized = {
         ...data[0],
         customerId: data[0].client_id,
@@ -625,13 +636,8 @@ export const AppProvider = ({ children }) => {
         expiryDate: data[0].expiry_date
       };
       setMemberships(prev => [normalized, ...prev]);
-      // Also update the client's status to Active
       setCustomers(prev => prev.map(c => c.id === data[0].client_id ? { ...c, status: 'Active' } : c));
-      // Trigger WhatsApp for new membership
       await sendWhatsAppAlert(data[0].client_id, 'MembershipCreated', { plan: data[0].membership_plan });
-    } else if (error) {
-       console.error("addMembership error:", error);
-       throw error;
     }
     return { data, error };
   };

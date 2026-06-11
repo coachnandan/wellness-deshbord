@@ -65,6 +65,7 @@ export default function Customers() {
         : membershipFormState.plan === '10 Days' ? 10 
         : 30;
         
+      console.log('[Membership] Creating membership for:', editingCustomer.id, 'Plan:', membershipFormState.plan);
       await addMembership({
         customerId: editingCustomer.id,
         customerName: editingCustomer.name,
@@ -76,8 +77,10 @@ export default function Customers() {
       toast.success('Membership created successfully.');
       setIsMembershipModalOpen(false);
     } catch (error) {
-      console.error('Membership failed:', error);
-      toast.error('Failed to create membership.');
+      const errMsg = error?.message || error?.error_description || 'Unknown error';
+      console.error('[Membership] Failed:', error);
+      console.error('[Membership] Error code:', error?.code, '| details:', error?.details, '| hint:', error?.hint);
+      toast.error(`Failed to create membership: ${errMsg}`);
     }
   };
 
