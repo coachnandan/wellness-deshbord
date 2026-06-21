@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { CreditCard, AlertTriangle, CheckCircle, Clock, ShieldAlert, DollarSign, Plus, X, Users, Filter, ChevronDown, Download, Eye, Edit3, Trash2, Activity, Calendar, History, MessageSquare, MapPin, Briefcase, Phone, ArrowRight, User, Info, Tag, Globe, Award, Sparkles, Zap, Smartphone } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useForm } from 'react-hook-form';
@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 import ClientEditModal from '../components/ClientEditModal';
 
 export default function Memberships() {
-  const { memberships, customers, addMembership, addNewMember, renewMembership, updateMembership, fetchMembershipActivityLogs, user, sendWhatsAppAlert } = useAppContext();
+  const { memberships, customers, addMembership, addNewMember, renewMembership, updateMembership, deleteMembership, fetchMembershipActivityLogs, user, sendWhatsAppAlert } = useAppContext();
   const [filter, setFilter] = useState('All');
 
   // Modals state
@@ -25,6 +25,23 @@ export default function Memberships() {
   const [memberAttendance, setMemberAttendance] = useState([]);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
+  const [extraType, setExtraType] = useState('');
+  const [isSavingExtra, setIsSavingExtra] = useState(false);
+  const [deletingIds, setDeletingIds] = useState(new Set());
+  const [usageLogs, setUsageLogs] = useState([]);
+
+  // ─── Live Sync: keep activeMembership fresh from memberships state ───────────
+  // When a Shake is marked, memberships state updates (remaining_days, status).
+  // Without this effect, the modal would show stale data.
+  useEffect(() => {
+    if (activeMembership && isDetailModalOpen) {
+      const fresh = memberships.find(m => m.id === activeMembership.id);
+      if (fresh) {
+        setActiveMembership(prev => ({ ...prev, ...fresh }));
+      }
+    }
+  }, [memberships]);
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-IN');
 
@@ -150,35 +167,79 @@ export default function Memberships() {
     }
   };
 
+  const handleDeleteMembership = async (membership) => {
+    if (deletingIds.has(membership.id)) return; // Prevent duplicate delete requests
+    if (!window.confirm("Are you sure you want to delete this membership?")) return;
+    
+    // Set loading state for this ID
+    setDeletingIds(prev => {
+      const next = new Set(prev);
+      next.add(membership.id);
+      return next;
+    });
+
+    console.log(`[Delete] Request Payload:`, { id: membership.id, customerId: membership.customerId, plan: membership.plan });
+
+    try {
+      const response = await deleteMembership(membership.id);
+      console.log(`[Delete] Database deletion response for Membership ID ${membership.id}:`, response);
+      toast.success("Membership deleted successfully.");
+      // Close detail modal if open for this membership
+      if (activeMembership?.id === membership.id) {
+        setIsDetailModalOpen(false);
+        setActiveMembership(null);
+      }
+    } catch (error) {
+      console.error('[Delete] Failed for Membership ID:', membership.id, error);
+      toast.error(error?.message || 'Unknown database/API error occurred.');
+    } finally {
+      // Clear loading state
+      setDeletingIds(prev => {
+        const next = new Set(prev);
+        next.delete(membership.id);
+        return next;
+      });
+    }
+  };
+
   const openDetailModal = async (membership) => {
-    setActiveMembership(membership);
+    // Always load fresh membership data from live state
+    const freshMembership = memberships.find(m => m.id === membership.id) || membership;
+    setActiveMembership(freshMembership);
     setIsDetailModalOpen(true);
     setIsDetailLoading(true);
+    setUsageLogs([]);
 
     try {
       if (supabase) {
         // Fetch Activity Logs
-        const logsData = await fetchMembershipActivityLogs(membership.id);
+        const logsData = await fetchMembershipActivityLogs(freshMembership.id);
         setActivityLogs(logsData);
 
-        // Fetch Renewal Logs (legacy, keep if needed or remove, let's keep it for now)
+        // Fetch Renewal Logs
         const { data: logs } = await supabase
           .from('renewal_logs')
           .select('*')
-          .eq('membership_id', membership.id)
+          .eq('membership_id', freshMembership.id)
           .order('renewed_at', { ascending: false });
-
         if (logs) setRenewalLogs(logs);
 
         // Fetch Member-specific Attendance (recent 10)
         const { data: att } = await supabase
           .from('attendance')
           .select('*')
-          .eq('client_id', membership.customerId)
+          .eq('client_id', freshMembership.customerId)
           .order('date', { ascending: false })
           .limit(10);
-
         if (att) setMemberAttendance(att);
+
+        // Fetch Shake Usage Logs (for the Shake Day tracker)
+        const { data: uLogs } = await supabase
+          .from('membership_usage_logs')
+          .select('*')
+          .eq('membership_id', freshMembership.id)
+          .order('created_at', { ascending: false });
+        if (uLogs) setUsageLogs(uLogs);
       }
     } catch (error) {
       console.error('Error fetching details:', error);
@@ -187,17 +248,19 @@ export default function Memberships() {
     }
   };
 
-  const handleUpdatePayment = async (newAdvanceAmount) => {
+  const handleUpdatePayment = async (newTotalAmount, newAdvanceAmount) => {
     if (!activeMembership) return;
     try {
-      const totalAmount = activeMembership.total_amount || 0;
-      const advanceAmount = parseFloat(newAdvanceAmount);
+      const totalAmount = parseFloat(newTotalAmount) || 0;
+      const advanceAmount = parseFloat(newAdvanceAmount) || 0;
       const remainingAmount = Math.max(0, totalAmount - advanceAmount);
       let statusDetail = 'Pending';
       if (remainingAmount === 0) statusDetail = 'Fully Paid';
       else if (remainingAmount > 0 && advanceAmount > 0) statusDetail = 'Partially Paid';
       
       const updates = {
+        amount: totalAmount,
+        total_amount: totalAmount,
         advance_amount: advanceAmount,
         remaining_amount: remainingAmount,
         payment_status_detail: statusDetail,
@@ -253,6 +316,41 @@ export default function Memberships() {
     } catch (error) {
       toast.error('Failed to change plan');
       console.error(error);
+    }
+  };
+
+  const handleSaveExtra = async (value) => {
+    if (!activeMembership) return;
+    setIsSavingExtra(true);
+    try {
+      // Calculate extra charge based on type
+      const extraCharge = value === 'SB' ? 500 : value === 'SF' ? 500 : 0;
+      
+      const updates = {
+        extra_type: value || null,
+        extra_charge: extraCharge
+      };
+
+      const { data } = await updateMembership(
+        activeMembership.id,
+        updates,
+        value ? 'ExtraAdded' : 'ExtraRemoved',
+        value ? `Extra ${value} added (+₹${extraCharge})` : 'Extra removed'
+      );
+
+      if (data && data[0]) {
+        setActiveMembership({ ...activeMembership, ...data[0], customerId: data[0].client_id, plan: data[0].membership_plan, expiryDate: data[0].expiry_date });
+      }
+
+      const logsData = await fetchMembershipActivityLogs(activeMembership.id);
+      setActivityLogs(logsData);
+
+      toast.success(value ? `Extra ${value} saved (+₹${extraCharge})` : 'Extra removed');
+    } catch (error) {
+      toast.error('Failed to save extra');
+      console.error(error);
+    } finally {
+      setIsSavingExtra(false);
     }
   };
 
@@ -441,8 +539,20 @@ export default function Memberships() {
                         >
                           <Activity size={16} />
                         </button>
-                        <button className="p-3 text-red-300 hover:text-red-600 bg-offwhite border border-beige rounded-xl transition-all shadow-sm hover:shadow-md">
-                          <Trash2 size={16} />
+                        <button
+                          disabled={deletingIds.has(membership.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteMembership(membership);
+                          }}
+                          className={`p-3 text-red-300 hover:text-white bg-offwhite hover:bg-red-500 border border-beige hover:border-red-500 rounded-xl transition-all shadow-sm hover:shadow-md ${deletingIds.has(membership.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title="Delete Membership"
+                        >
+                          {deletingIds.has(membership.id) ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -862,6 +972,53 @@ export default function Memberships() {
                         </button>
                       </div>
                     </section>
+
+                    {/* Extra Selection Section */}
+                    <section>
+                      <div className="flex items-center space-x-3 mb-6">
+                        <div className="p-2 bg-offwhite rounded-lg border border-beige">
+                          <Sparkles size={16} className="text-[#7C3AED]" />
+                        </div>
+                        <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Extra</h3>
+                      </div>
+                      <div className="bg-offwhite/40 border border-beige rounded-xl p-5 space-y-4">
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Select Extra</label>
+                          <select
+                            value={extraType || activeMembership?.extra_type || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setExtraType(val);
+                              handleSaveExtra(val);
+                            }}
+                            disabled={isSavingExtra}
+                            className="w-full px-5 py-4 bg-white border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-[#7C3AED]/20 transition-all appearance-none cursor-pointer disabled:opacity-50"
+                          >
+                            <option value="">None</option>
+                            <option value="SB">SB (Shake + Beta Heart)</option>
+                            <option value="SF">SF (Shake + Fiber)</option>
+                          </select>
+                        </div>
+
+                        {/* Extra Charge Display */}
+                        {(extraType || activeMembership?.extra_type) && (
+                          <div className="flex justify-between items-center p-4 bg-[#7C3AED]/5 border border-[#7C3AED]/20 rounded-xl">
+                            <div>
+                              <p className="text-[9px] font-black text-[#7C3AED] uppercase tracking-widest">Extra Charge</p>
+                              <p className="text-xs font-bold text-muted mt-0.5">Billed separately from membership</p>
+                            </div>
+                            <p className="text-xl font-extrabold text-[#7C3AED]">₹{(activeMembership?.extra_charge || 500).toLocaleString('en-IN')}</p>
+                          </div>
+                        )}
+
+                        {isSavingExtra && (
+                          <div className="flex items-center justify-center space-x-2 py-2">
+                            <div className="w-4 h-4 border-2 border-[#7C3AED]/20 border-t-[#7C3AED] rounded-full animate-spin"></div>
+                            <span className="text-[10px] font-bold text-muted">Saving...</span>
+                          </div>
+                        )}
+                      </div>
+                    </section>
                   </div>
 
                   {/* Right Column: Membership & History */}
@@ -874,11 +1031,14 @@ export default function Memberships() {
                         <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Membership Architecture</h3>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        {/* Active Plan Card */}
                         <div className="bg-white border border-beige rounded-xl p-5 shadow-sm">
                           <div className="flex items-center justify-between mb-5">
                             <div>
                               <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Active Plan</p>
-                              <p className="text-xl font-black text-forest">{activeMembership.plan}</p>
+                              <p className="text-xl font-black text-forest">
+                                {activeMembership.membership_plan || activeMembership.plan || '—'}
+                              </p>
                             </div>
                             <div className="w-11 h-11 bg-offwhite rounded-xl flex items-center justify-center text-forest border border-beige shadow-sm">
                               <CreditCard size={20} />
@@ -886,79 +1046,141 @@ export default function Memberships() {
                           </div>
                           <div className="grid grid-cols-2 gap-6">
                             <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Total</p>
-                              <p className="text-lg font-extrabold text-sage">₹{activeMembership.total_amount?.toLocaleString('en-IN') || activeMembership.amount?.toLocaleString('en-IN')}</p>
-                            </div>
-                            <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Advance</p>
-                              <p className="text-lg font-extrabold text-forest">₹{activeMembership.advance_amount?.toLocaleString('en-IN') || activeMembership.amount?.toLocaleString('en-IN')}</p>
-                            </div>
-                            <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Remaining</p>
-                              <p className="text-lg font-extrabold text-red-500">₹{activeMembership.remaining_amount?.toLocaleString('en-IN') || 0}</p>
-                            </div>
-                            <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Status</p>
-                              <p className="text-sm font-extrabold text-forest">{activeMembership.payment_status_detail || activeMembership.payment_status || 'Paid'}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="bg-white border border-beige rounded-xl p-5 shadow-sm">
-                          <div className="flex items-center justify-between mb-5">
-                            <div>
-                              <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Journey Validity</p>
-                              <p className="text-xl font-black text-forest">
-                                {Math.ceil((new Date(activeMembership.expiryDate || new Date()) - new Date()) / (1000 * 60 * 60 * 24))} Days
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Total Amount</p>
+                              <p className="text-lg font-extrabold text-sage">
+                                ₹{(activeMembership.total_amount ?? activeMembership.amount ?? 0).toLocaleString('en-IN')}
                               </p>
                             </div>
-                            <div className="w-11 h-11 bg-offwhite rounded-xl flex items-center justify-center text-gold border border-beige shadow-sm">
-                              <Clock size={20} />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-6">
                             <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Begins</p>
-                              <p className="text-sm font-bold text-forest">{activeMembership.startDate ? new Date(activeMembership.startDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Advance Paid</p>
+                              <p className="text-lg font-extrabold text-forest">
+                                ₹{(activeMembership.advance_amount ?? activeMembership.amount ?? 0).toLocaleString('en-IN')}
+                              </p>
                             </div>
                             <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Concludes</p>
-                              <p className="text-sm font-bold text-forest">{activeMembership.expiryDate ? new Date(activeMembership.expiryDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Balance Due</p>
+                              <p className="text-lg font-extrabold text-red-500">
+                                ₹{(activeMembership.remaining_amount ?? 0).toLocaleString('en-IN')}
+                              </p>
                             </div>
+                            <div>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Payment Status</p>
+                              <p className="text-sm font-extrabold text-forest">
+                                {activeMembership.payment_status_detail || activeMembership.payment_status || 'Paid'}
+                              </p>
+                            </div>
+                            {activeMembership?.extra_type && (
+                              <>
+                                <div>
+                                  <p className="text-[9px] font-black text-[#7C3AED] uppercase tracking-widest mb-1">Extra ({activeMembership.extra_type})</p>
+                                  <p className="text-lg font-extrabold text-[#7C3AED]">+₹{(activeMembership.extra_charge ?? 500).toLocaleString('en-IN')}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Grand Total</p>
+                                  <p className="text-lg font-extrabold text-forest">₹{((activeMembership.total_amount || activeMembership.amount || 0) + (activeMembership.extra_charge || 0)).toLocaleString('en-IN')}</p>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
+
+                        {/* Remaining Days Card with progress bar */}
+                        {(() => {
+                          const totalDays = activeMembership.duration_days || 30;
+                          const remDays = activeMembership.remaining_days ?? totalDays;
+                          const usedDays = totalDays - remDays;
+                          const pct = totalDays > 0 ? Math.min(100, Math.round((usedDays / totalDays) * 100)) : 0;
+                          const barColor = pct >= 80 ? '#EF4444' : pct >= 50 ? '#F59E0B' : '#1F4D3A';
+                          return (
+                            <div className="bg-white border border-beige rounded-xl p-5 shadow-sm">
+                              <div className="flex items-center justify-between mb-4">
+                                <div>
+                                  <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Remaining Days</p>
+                                  <p className="text-xl font-black text-forest">{remDays} / {totalDays} Days</p>
+                                </div>
+                                <div className="w-11 h-11 bg-offwhite rounded-xl flex items-center justify-center text-gold border border-beige shadow-sm">
+                                  <Clock size={20} />
+                                </div>
+                              </div>
+                              {/* Usage progress bar */}
+                              <div className="mb-5">
+                                <div className="flex justify-between text-[9px] font-black text-muted uppercase tracking-widest mb-1.5">
+                                  <span>{usedDays} Shake Days Used</span>
+                                  <span>{pct}%</span>
+                                </div>
+                                <div className="w-full h-2 bg-beige rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-700"
+                                    style={{ width: `${pct}%`, backgroundColor: barColor }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                  <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Start Date</p>
+                                  <p className="text-sm font-bold text-forest">{activeMembership.start_date || activeMembership.startDate ? new Date(activeMembership.start_date || activeMembership.startDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Expiry Date</p>
+                                  <p className="text-sm font-bold text-forest">{activeMembership.expiry_date || activeMembership.expiryDate ? new Date(activeMembership.expiry_date || activeMembership.expiryDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </section>
 
+                    {/* Shake Usage Log + Recent Presence */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
+                      {/* Shake Usage Log */}
                       <section>
                         <div className="flex items-center justify-between mb-6">
                           <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-offwhite rounded-lg border border-beige">
-                              <History size={16} className="text-sage" />
+                            <div className="p-2 bg-[#FEF3C7] rounded-lg border border-[#FDE68A]">
+                              <Zap size={16} className="text-[#D97706]" />
                             </div>
-                            <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Activity Audit Log</h3>
+                            <div>
+                              <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Shake Usage Log</h3>
+                              <p className="text-[9px] text-muted font-bold mt-0.5">{usageLogs.length} shake{usageLogs.length !== 1 ? 's' : ''} recorded</p>
+                            </div>
                           </div>
                         </div>
-                        <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
-                          {activityLogs.length > 0 ? activityLogs.map((log, i) => (
-                            <div key={i} className="flex flex-col p-4 bg-offwhite/40 rounded-xl border border-beige/40">
-                              <div className="flex justify-between items-start mb-2">
-                                <span className="px-2 py-1 bg-white border border-beige rounded text-[8px] font-black uppercase tracking-widest text-forest">
-                                  {log.action_type}
-                                </span>
-                                <p className="text-[9px] font-bold text-muted">{new Date(log.created_at).toLocaleString('en-IN')}</p>
+                        <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1 no-scrollbar">
+                          {usageLogs.length > 0 ? usageLogs.map((log, i) => (
+                            <div key={i} className="p-4 bg-[#FFFBEB] border border-[#FDE68A]/60 rounded-xl">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <span className="px-2 py-0.5 bg-[#D97706] text-white rounded text-[8px] font-black uppercase tracking-widest">
+                                    Day {log.used_day ?? (i + 1)}
+                                  </span>
+                                  <span className="text-[9px] font-black text-[#92400E] uppercase tracking-widest">
+                                    {log.remaining_days ?? 0} left
+                                  </span>
+                                </div>
+                                <p className="text-[9px] font-bold text-muted">
+                                  {log.shake_date ? new Date(log.shake_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
+                                </p>
                               </div>
-                              <p className="text-sm font-bold text-forest mb-1">{log.action_description}</p>
-                              <p className="text-[9px] font-black text-sage uppercase tracking-widest">By: {log.performed_by_name}</p>
+                              <div className="flex justify-between items-center">
+                                <p className="text-xs font-bold text-forest">
+                                  {log.shake_time_ist || '—'}
+                                </p>
+                                <p className="text-[9px] font-black text-muted uppercase tracking-widest">
+                                  By: {log.updated_by_name || 'System'}
+                                </p>
+                              </div>
                             </div>
                           )) : (
-                            <div className="py-10 text-center bg-offwhite/20 rounded-2xl border border-dashed border-beige">
-                              <p className="text-[10px] font-black text-muted uppercase tracking-widest">No activity history</p>
+                            <div className="py-10 text-center bg-[#FFFBEB]/50 rounded-2xl border border-dashed border-[#FDE68A]">
+                              <Zap size={20} className="text-[#FDE68A] mx-auto mb-2" />
+                              <p className="text-[10px] font-black text-muted uppercase tracking-widest">No shakes recorded yet</p>
                             </div>
                           )}
                         </div>
                       </section>
 
+                      {/* Recent Presence */}
                       <section>
                         <div className="flex items-center justify-between mb-6">
                           <div className="flex items-center space-x-3">
@@ -968,15 +1190,23 @@ export default function Memberships() {
                             <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Recent Presence</h3>
                           </div>
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1 no-scrollbar">
                           {memberAttendance.length > 0 ? memberAttendance.map((att, i) => (
                             <div key={i} className="flex items-center justify-between p-4 bg-offwhite/40 rounded-xl border border-beige/40">
-                              <div>
-                                <p className="text-[10px] font-bold text-forest">{new Date(att.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                              </div>
-                              <div>
-                                <span className={`px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest ${att.status === 'Present' ? 'bg-emerald/10 text-emerald' : 'bg-red-50 text-red-500'
-                                  }`}>
+                              <p className="text-[10px] font-bold text-forest">
+                                {new Date(att.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                {att.remark && ['S', 'SB', 'SF'].includes(att.remark) && (
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                                    att.remark === 'S' ? 'bg-[#FEF3C7] text-[#D97706]' :
+                                    att.remark === 'SB' ? 'bg-[#F3E8FF] text-[#7C3AED]' :
+                                    'bg-[#CFFAFE] text-[#0891B2]'
+                                  }`}>{att.remark}</span>
+                                )}
+                                <span className={`px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest ${
+                                  att.status === 'Present' ? 'bg-emerald/10 text-emerald' : 'bg-red-50 text-red-500'
+                                }`}>
                                   {att.status}
                                 </span>
                               </div>
@@ -990,6 +1220,35 @@ export default function Memberships() {
                       </section>
                     </div>
 
+                    {/* Activity Audit Log (full width) */}
+                    <section>
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="p-2 bg-offwhite rounded-lg border border-beige">
+                          <History size={16} className="text-sage" />
+                        </div>
+                        <h3 className="text-[10px] font-black text-forest uppercase tracking-[0.2em]">Activity Audit Log</h3>
+                      </div>
+                      <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 no-scrollbar">
+                        {activityLogs.length > 0 ? activityLogs.map((log, i) => (
+                          <div key={i} className="flex flex-col p-4 bg-offwhite/40 rounded-xl border border-beige/40">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="px-2 py-1 bg-white border border-beige rounded text-[8px] font-black uppercase tracking-widest text-forest">
+                                {log.action_type}
+                              </span>
+                              <p className="text-[9px] font-bold text-muted">{new Date(log.created_at).toLocaleString('en-IN')}</p>
+                            </div>
+                            <p className="text-sm font-bold text-forest mb-1">{log.action_description}</p>
+                            <p className="text-[9px] font-black text-sage uppercase tracking-widest">By: {log.performed_by_name}</p>
+                          </div>
+                        )) : (
+                          <div className="py-8 text-center bg-offwhite/20 rounded-2xl border border-dashed border-beige">
+                            <p className="text-[10px] font-black text-muted uppercase tracking-widest">No activity history</p>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    {/* Internal Metadata */}
                     <div className="p-5 sm:p-6 bg-forest rounded-xl text-white shadow-xl shadow-forest/20 relative overflow-hidden group">
                       <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
                         <Sparkles size={80} />
@@ -999,7 +1258,7 @@ export default function Memberships() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6 mt-4">
                           <div>
                             <p className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em] mb-1">Enrolled By</p>
-                            <p className="text-xs font-bold">{activeMembership.added_by || 'System Admin'}</p>
+                            <p className="text-xs font-bold">{activeMembership.created_by_name || activeMembership.added_by || 'System Admin'}</p>
                           </div>
                           <div>
                             <p className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em] mb-1">System Entry</p>
@@ -1032,15 +1291,15 @@ export default function Memberships() {
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();
-              handleUpdatePayment(e.target.advance_amount.value);
+              handleUpdatePayment(e.target.total_amount.value, e.target.advance_amount.value);
             }} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">Total Amount</label>
-                <input type="number" disabled value={activeMembership?.total_amount || activeMembership?.amount || 0} className="w-full px-4 py-3 bg-offwhite/50 border border-beige rounded-xl font-bold text-forest" />
+                <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">Total Amount (₹)</label>
+                <input type="number" name="total_amount" defaultValue={activeMembership?.total_amount ?? activeMembership?.amount ?? 0} className="w-full px-4 py-3 bg-offwhite border border-beige rounded-xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20" />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">Advance Paid (₹)</label>
-                <input type="number" name="advance_amount" defaultValue={activeMembership?.advance_amount || activeMembership?.amount || 0} className="w-full px-4 py-3 bg-offwhite border border-beige rounded-xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20" />
+                <input type="number" name="advance_amount" defaultValue={activeMembership?.advance_amount ?? activeMembership?.amount ?? 0} className="w-full px-4 py-3 bg-offwhite border border-beige rounded-xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20" />
               </div>
               <button type="submit" className="w-full py-4 bg-forest text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all">Save Payment</button>
             </form>

@@ -400,7 +400,8 @@ export const AppProvider = ({ children }) => {
         expiry_date: expiryDate.toISOString().split('T')[0],
         status: 'Active',
         payment_status: 'Paid',
-        renewal_status: 'New'
+        renewal_status: 'New',
+        remaining_days: 30
       }
     ]).select();
 
@@ -528,44 +529,79 @@ export const AppProvider = ({ children }) => {
 
   const updateAttendance = async (record) => {
     const clientName = customers.find(c => c.id === record.customerId)?.name || 'Unknown';
+    const now = new Date();
+    const dateIST = getISTDateString(now);
+    const timeIST = getISTTimeString(now);
     const markerName = user?.name || user?.email?.split('@')[0] || 'Coach';
-    const now = new Date().toISOString();
 
-    const { data, error } = await supabase
+    // 1. Update/Insert Attendance
+    const { data: attData, error: attErr } = await supabase
       .from('attendance')
-      .upsert({ 
-        client_id: record.customerId, 
-        date: record.date, 
+      .upsert({
+        client_id: record.customerId,
+        date: record.date,
         status: record.status,
+        remark: record.remark || null,
         user_id: user?.id || null,
         marked_by_name: markerName,
         client_name: clientName,
-        source: 'Manual',
-        updated_at: now
+        updated_at: now.toISOString()
       }, { onConflict: 'client_id, date' })
       .select();
 
-    if (error) {
-      if (error.message?.includes('ATTENDANCE_LOCKED')) {
-        throw new Error('Attendance for this date has been finalized and cannot be modified.');
-      }
-      console.error("updateAttendance failed:", error);
-      throw error;
-    }
+    if (attErr) throw attErr;
 
-    const updatedRecord = { 
-      ...data[0], 
-      customerId: data[0].client_id, 
-      markedBy: markerName,
-      source: data[0].source || 'Manual'
-    };
-    const existingIndex = attendance.findIndex(a => a.customerId === updatedRecord.customerId && a.date === updatedRecord.date);
-    if (existingIndex >= 0) {
-      const newAttendance = [...attendance];
-      newAttendance[existingIndex] = updatedRecord;
-      setAttendance(newAttendance);
-    } else {
-      setAttendance([...attendance, updatedRecord]);
+    // 2. Local State Sync — update existing or append new
+    const mappedRecord = { ...attData[0], customerId: attData[0].client_id, markedBy: markerName };
+    setAttendance(prev => {
+      const idx = prev.findIndex(a => a.customerId === record.customerId && a.date === record.date);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = { ...prev[idx], ...mappedRecord };
+        return updated;
+      }
+      return [...prev, mappedRecord];
+    });
+
+    // 3. Shake Deduction Logic
+    const isShake = ['S', 'SB', 'SF'].includes(record.remark);
+    if (isShake) {
+      const activeMem = memberships.find(m => 
+        (m.client_id === record.customerId || m.customerId === record.customerId) && 
+        m.status === 'Active'
+      );
+
+      if (activeMem) {
+        // Check if log already exists for this specific date to prevent double-decrement
+        const { data: existingLogs } = await supabase
+          .from('membership_usage_logs')
+          .select('id')
+          .eq('membership_id', activeMem.id)
+          .eq('shake_date', record.date);
+
+        if (!existingLogs || existingLogs.length === 0) {
+          const newRemaining = Math.max(0, (activeMem.remaining_days || 0) - 1);
+          const newStatus = newRemaining === 0 ? 'Expired' : 'Active';
+
+          // Update Membership
+          await supabase.from('memberships')
+            .update({ remaining_days: newRemaining, status: newStatus })
+            .eq('id', activeMem.id);
+
+          // Update Frontend
+          setMemberships(prev => prev.map(m => m.id === activeMem.id ? { ...m, remaining_days: newRemaining, status: newStatus } : m));
+
+          // Log Usage
+          await supabase.from('membership_usage_logs').insert({
+            membership_id: activeMem.id,
+            client_id: record.customerId,
+            shake_date: record.date,
+            shake_time_ist: timeIST,
+            remaining_days: newRemaining,
+            updated_by_name: markerName
+          });
+        }
+      }
     }
   };
 
@@ -610,6 +646,7 @@ export const AppProvider = ({ children }) => {
       status: 'Active',
       payment_status: 'Paid',
       renewal_status: 'New',
+      remaining_days: membershipData.durationDays || 30,
       created_by_user_id: user?.id || null,
       created_by_name: markerName
     };
@@ -753,7 +790,8 @@ export const AppProvider = ({ children }) => {
       payment_status: paymentStatusDetail === 'Pending' ? 'Pending' : 'Paid',
       renewal_status: 'New',
       created_by_user_id: user?.id || null,
-      created_by_name: creatorName
+      created_by_name: creatorName,
+      remaining_days: duration
     };
     console.log('[addNewMember] memberships insert payload:', membershipPayload);
     const { data: memData, error: memError } = await supabase.from('memberships').insert([
@@ -835,7 +873,7 @@ export const AppProvider = ({ children }) => {
       referred_by: 'Visitor Log',
       name: visitorData.visitor_name,
       contact: visitorData.mobile_number,
-      status: membershipData ? 'Active' : 'Afresh',
+      status: 'Active',
       created_by: user?.id
     };
 
@@ -890,7 +928,8 @@ export const AppProvider = ({ children }) => {
           expiry_date: newExpiry.toISOString().split('T')[0],
           status: 'Active',
           payment_status: 'Paid',
-          renewal_status: 'New'
+          renewal_status: 'New',
+          remaining_days: parseInt(durationDays)
         }])
         .select();
 
@@ -962,6 +1001,59 @@ export const AppProvider = ({ children }) => {
 
     setMemberships(memberships.map(m => m.id === membershipId ? { ...updatedData[0], customerId: updatedData[0].client_id, plan: updatedData[0].membership_plan, expiryDate: updatedData[0].expiry_date } : m));
     return { data: updatedData, error: null };
+  };
+
+  const deleteMembership = async (membershipId) => {
+    const membership = memberships.find(m => m.id === membershipId);
+    if (!membership) throw new Error('Membership not found');
+
+    const clientId = membership.client_id || membership.customerId;
+    const clientName = customers.find(c => c.id === clientId)?.name || membership.client_name || 'Unknown';
+    const deletedByUserId = user?.id || null;
+    const deletedByUserName = user?.name || user?.email?.split('@')[0] || 'System Admin';
+    const deletionTimeIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+    // Log the action (Non-fatal if it fails)
+    try {
+      await supabase.from('membership_activity_logs').insert({
+        membership_id: null, // Keep NULL to prevent ON DELETE CASCADE from deleting this audit log
+        client_id: clientId,
+        action_type: 'MembershipDeleted',
+        action_description: `Deleted Membership ID: ${membershipId} | Member ID: ${clientId} | Member Name: ${clientName} | Deleted By User ID: ${deletedByUserId} | Deleted By User Name: ${deletedByUserName} | Deletion Date & Time (IST): ${deletionTimeIST}`,
+        performed_by_user_id: deletedByUserId,
+        performed_by_name: deletedByUserName
+      });
+    } catch (logErr) {
+      console.warn('[deleteMembership] Activity log failed:', logErr);
+    }
+
+    // Delete ONLY from the membership table (Backend logic)
+    const { data: deleteData, error: deleteError } = await supabase
+      .from('memberships')
+      .delete()
+      .eq('id', membershipId)
+      .select();
+
+    if (deleteError) {
+      console.error('[deleteMembership] Delete failed:', deleteError);
+      throw deleteError;
+    }
+
+    if (!deleteData || deleteData.length === 0) {
+      const errorMsg = `Delete failed: 0 rows affected in database. This is typically caused by Row-Level Security (RLS) policies blocking the delete operation for your account role, or because the record was already deleted. Please verify your permissions in the profiles table.`;
+      console.error('[deleteMembership] 0 rows affected:', errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // Optimistically update frontend state immediately
+    setMemberships(prev => prev.filter(m => m.id !== membershipId));
+
+    // Refresh data from the backend to ensure frontend logic reflects changes
+    if (user) {
+      await fetchData(user);
+    }
+
+    return { success: true };
   };
 
   const updateMembership = async (membershipId, updates, actionType, actionDescription) => {
@@ -1104,7 +1196,7 @@ export const AppProvider = ({ children }) => {
       customers, addCustomer, updateCustomer, deleteCustomer,
       visitors, addVisitor, updateVisitor, deleteVisitor,
       attendance, updateAttendance, setAttendance, fetchMonthlyAttendance, attendanceLocks, finalizeAttendance,
-      memberships, addMembership, renewMembership, addNewMember, fetchData, convertVisitorToMember, updateMembership, fetchMembershipActivityLogs,
+      memberships, addMembership, renewMembership, addNewMember, fetchData, convertVisitorToMember, updateMembership, deleteMembership, fetchMembershipActivityLogs,
       notifications, setNotifications, sendWhatsAppAlert,
       dataLoading
     }}>
