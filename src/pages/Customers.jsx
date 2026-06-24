@@ -17,8 +17,10 @@ export default function Customers() {
   const [membershipFormState, setMembershipFormState] = useState({
     startDate: new Date().toISOString().split('T')[0],
     plan: '10 Days',
-    amount: 2500,
-    amountType: 'Default'
+    durationDays: 10,
+    customDuration: '',
+    totalAmount: 2500,
+    advanceAmount: 2500
   });
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
@@ -51,8 +53,10 @@ export default function Customers() {
     setMembershipFormState({
       startDate: new Date().toISOString().split('T')[0],
       plan: '10 Days',
-      amount: 2500,
-      amountType: 'Default'
+      durationDays: 10,
+      customDuration: '',
+      totalAmount: 2500,
+      advanceAmount: 2500
     });
     setIsMembershipModalOpen(true);
     setActiveDropdown(null);
@@ -61,18 +65,25 @@ export default function Customers() {
   const handleMembershipSubmit = async (e) => {
     e.preventDefault();
     try {
-      const duration = membershipFormState.plan === '3 Days' ? 3 
-        : membershipFormState.plan === '10 Days' ? 10 
-        : 30;
-        
-      console.log('[Membership] Creating membership for:', editingCustomer.id, 'Plan:', membershipFormState.plan);
+      const { plan, durationDays, customDuration, startDate, totalAmount, advanceAmount } = membershipFormState;
+
+      const isOther = plan === 'Other';
+      const finalDuration = isOther ? parseInt(customDuration) : parseInt(durationDays);
+
+      if (isOther && (!customDuration || finalDuration < 1)) {
+        toast.error('Please enter a valid custom duration (minimum 1 day).');
+        return;
+      }
+
+      console.log('[Membership] Creating membership for:', editingCustomer.id, 'Plan:', plan, 'Duration:', finalDuration);
       await addMembership({
         customerId: editingCustomer.id,
         customerName: editingCustomer.name,
-        plan: membershipFormState.plan,
-        durationDays: duration,
-        amount: membershipFormState.amount,
-        startDate: membershipFormState.startDate
+        plan,
+        durationDays: finalDuration,
+        totalAmount: parseFloat(totalAmount),
+        advanceAmount: parseFloat(advanceAmount),
+        startDate
       });
       toast.success('Membership created successfully.');
       setIsMembershipModalOpen(false);
@@ -488,7 +499,7 @@ export default function Customers() {
                 <X size={24} />
               </button>
             </div>
-            
+
             <div className="p-6 sm:p-10 md:p-12 space-y-6 sm:space-y-8">
               {/* Read-Only Details */}
               <div className="bg-offwhite/50 p-6 rounded-2xl border border-beige/50">
@@ -502,67 +513,145 @@ export default function Customers() {
                 </div>
               </div>
 
-              <form onSubmit={handleMembershipSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Membership Start Date *</label>
-                  <input type="date" required value={membershipFormState.startDate} onChange={(e) => setMembershipFormState(p => ({...p, startDate: e.target.value}))} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Membership Plan *</label>
-                  <select required value={membershipFormState.plan} onChange={(e) => {
-                    const plan = e.target.value;
-                    const defaultAmount = plan === '3 Days' ? 729 : plan === '10 Days' ? 2500 : 7000;
-                    setMembershipFormState(p => ({
-                      ...p, 
-                      plan, 
-                      amount: p.amountType === 'Default' ? defaultAmount : p.amount
-                    }));
-                  }} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
-                    <option value="3 Days">3 Days</option>
-                    <option value="10 Days">10 Days</option>
-                    <option value="30 Days">30 Days</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Total Amount (₹) *</label>
-                  <div className="flex gap-4">
-                    <select 
-                      value={membershipFormState.amountType} 
-                      onChange={(e) => {
-                        const amountType = e.target.value;
-                        const defaultAmount = membershipFormState.plan === '3 Days' ? 729 : membershipFormState.plan === '10 Days' ? 2500 : 7000;
-                        setMembershipFormState(p => ({
-                          ...p, 
-                          amountType, 
-                          amount: amountType === 'Default' ? defaultAmount : p.amount
-                        }));
-                      }} 
-                      className={`h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none ${membershipFormState.amountType === 'Other' ? 'w-1/3' : 'w-full'}`}
-                    >
-                      <option value="Default">₹{membershipFormState.plan === '3 Days' ? 729 : membershipFormState.plan === '10 Days' ? 2500 : 7000}</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    {membershipFormState.amountType === 'Other' && (
-                      <input 
-                        type="number" 
-                        required 
-                        min="0" 
-                        value={membershipFormState.amount} 
-                        onChange={(e) => setMembershipFormState(p => ({...p, amount: e.target.value}))} 
-                        className="flex-1 h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all" 
-                        placeholder="Enter custom amount" 
-                      />
+              {/* Membership Form */}
+              {(() => {
+                const tAmt = parseFloat(membershipFormState.totalAmount) || 0;
+                const aAmt = parseFloat(membershipFormState.advanceAmount) || 0;
+                const dueAmt = Math.max(0, tAmt - aAmt);
+
+                let paymentStatus = 'Unpaid';
+                let statusColor = 'bg-red-50 text-red-600 border-red-100';
+                if (dueAmt === 0 && tAmt > 0) {
+                  paymentStatus = 'Paid';
+                  statusColor = 'bg-[#DDF5E5] text-[#1F7A45] border-[#DDF5E5]';
+                } else if (aAmt > 0 && dueAmt > 0) {
+                  paymentStatus = 'Partially Paid';
+                  statusColor = 'bg-amber-50 text-amber-600 border-amber-200';
+                }
+
+                const planDurationMap = { '3 Days': 3, '10 Days': 10, '30 Days': 30 };
+                const planDefaultAmountMap = { '3 Days': 729, '10 Days': 2500, '30 Days': 7000 };
+                const isOtherPlan = membershipFormState.plan === 'Other';
+
+                return (
+                  <form onSubmit={handleMembershipSubmit} className="space-y-6">
+                    {/* Row 1: Start Date + Plan */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Membership Start Date *</label>
+                        <input
+                          type="date" required
+                          value={membershipFormState.startDate}
+                          onChange={(e) => setMembershipFormState(p => ({ ...p, startDate: e.target.value }))}
+                          className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Membership Plan *</label>
+                        <select
+                          required
+                          value={membershipFormState.plan}
+                          onChange={(e) => {
+                            const plan = e.target.value;
+                            if (plan === 'Other') {
+                              setMembershipFormState(p => ({ ...p, plan, durationDays: 0, customDuration: '', totalAmount: '', advanceAmount: '' }));
+                            } else {
+                              const dur = planDurationMap[plan] || 30;
+                              const defaultAmt = planDefaultAmountMap[plan] || 0;
+                              setMembershipFormState(p => ({ ...p, plan, durationDays: dur, customDuration: '', totalAmount: defaultAmt, advanceAmount: defaultAmt }));
+                            }
+                          }}
+                          className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
+                        >
+                          <option value="3 Days">3 Days</option>
+                          <option value="10 Days">10 Days</option>
+                          <option value="30 Days">30 Days</option>
+                          <option value="Other">Other (Custom)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Custom Duration — only shown when Other is selected */}
+                    {isOtherPlan && (
+                      <div className="p-5 bg-amber-50/60 border border-amber-200/60 rounded-2xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <p className="text-[9px] font-black text-amber-700 uppercase tracking-[0.25em]">✦ Custom Plan Configuration</p>
+                        <div>
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Custom Duration (Days) *</label>
+                          <input
+                            type="number"
+                            required={isOtherPlan}
+                            min="1"
+                            max="3650"
+                            value={membershipFormState.customDuration}
+                            onChange={(e) => setMembershipFormState(p => ({ ...p, customDuration: e.target.value }))}
+                            className="w-full h-14 px-6 bg-white border border-amber-300 rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-amber-200/50 transition-all placeholder-muted/30"
+                            placeholder="e.g. 15, 21, 45, 60..."
+                          />
+                          <p className="text-[9px] font-bold text-muted px-1 mt-1.5">Enter the total number of days for this custom plan.</p>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </div>
-                
-                <div className="flex gap-6 pt-4">
-                  <button type="button" onClick={() => setIsMembershipModalOpen(false)} className="flex-1 px-8 py-5 bg-white text-muted border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Cancel</button>
-                  <button type="submit" className="flex-[2] px-8 py-5 bg-forest text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all shadow-xl shadow-forest/20">
-                    Activate Membership
-                  </button>
-                </div>
-              </form>
+
+                    {/* Row 2: Total Amount + Advance Amount */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Total Amount (₹) *</label>
+                        <input
+                          type="number" required min="0"
+                          value={membershipFormState.totalAmount}
+                          onChange={(e) => setMembershipFormState(p => ({ ...p, totalAmount: e.target.value }))}
+                          className={`w-full h-14 px-6 border rounded-2xl font-bold text-forest outline-none focus:ring-4 transition-all placeholder-muted/30 ${
+                            isOtherPlan
+                              ? 'bg-white border-amber-300 focus:ring-amber-200/50'
+                              : 'bg-offwhite border-beige focus:ring-sage/10'
+                          }`}
+                          placeholder={isOtherPlan ? 'Enter custom amount...' : 'Total membership amount'}
+                        />
+                        {isOtherPlan && <p className="text-[9px] font-bold text-muted px-1 mt-1.5">Manually set the total amount for this plan.</p>}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Advance Amount (₹) *</label>
+                        <input
+                          type="number" required min="0"
+                          value={membershipFormState.advanceAmount}
+                          onChange={(e) => setMembershipFormState(p => ({ ...p, advanceAmount: e.target.value }))}
+                          className={`w-full h-14 px-6 border rounded-2xl font-bold text-forest outline-none focus:ring-4 transition-all placeholder-muted/30 ${
+                            isOtherPlan
+                              ? 'bg-white border-amber-300 focus:ring-amber-200/50'
+                              : 'bg-offwhite border-beige focus:ring-sage/10'
+                          }`}
+                          placeholder="Amount received now"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Row 3: Due Amount + Payment Status (auto-calculated, read-only) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Due Amount (₹)</label>
+                        <div className="w-full h-14 px-6 bg-offwhite/50 border border-beige rounded-2xl font-extrabold text-red-500 flex items-center cursor-not-allowed">
+                          ₹{dueAmt.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Payment Status</label>
+                        <div className="w-full h-14 px-6 bg-offwhite/50 border border-beige rounded-2xl flex items-center">
+                          <span className={`inline-flex items-center px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] border ${statusColor}`}>
+                            {paymentStatus}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-6 pt-4">
+                      <button type="button" onClick={() => setIsMembershipModalOpen(false)} className="flex-1 px-8 py-5 bg-white text-muted border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite transition-all">Cancel</button>
+                      <button type="submit" className="flex-[2] px-8 py-5 bg-forest text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-forest-hover transition-all shadow-xl shadow-forest/20">
+                        Activate Membership
+                      </button>
+                    </div>
+                  </form>
+                );
+              })()}
             </div>
           </div>
         </div>

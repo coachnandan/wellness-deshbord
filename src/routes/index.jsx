@@ -12,6 +12,7 @@ const Customers = React.lazy(() => import('../pages/Customers'));
 const Attendance = React.lazy(() => import('../pages/Attendance'));
 const Memberships = React.lazy(() => import('../pages/Memberships'));
 const Visitor = React.lazy(() => import('../pages/Visitor'));
+const Closing = React.lazy(() => import('../pages/Closing'));
 const Notifications = React.lazy(() => import('../pages/Notifications'));
 const Analytics = React.lazy(() => import('../pages/Analytics'));
 const Settings = React.lazy(() => import('../pages/Settings'));
@@ -162,6 +163,14 @@ export default function AppRoutes() {
               element={
                 <AdminRoute>
                   <Visitor />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="closing"
+              element={
+                <AdminRoute>
+                  <Closing />
                 </AdminRoute>
               }
             />

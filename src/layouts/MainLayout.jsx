@@ -13,18 +13,20 @@ import {
   User as UserIcon,
   Leaf,
   BarChart3,
-  Settings
+  Settings,
+  CheckSquare
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import NotificationPopup from '../components/NotificationPopup';
 import ProfilePopup from '../components/ProfilePopup';
 
 const adminNavItems = [
-  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Members', path: '/clients', icon: Users },
+  { name: 'Dashboard',  path: '/dashboard',  icon: LayoutDashboard },
+  { name: 'Members',    path: '/clients',    icon: Users },
   { name: 'Attendance', path: '/attendance', icon: CalendarCheck },
-  { name: 'Memberships', path: '/memberships', icon: CreditCard },
-  { name: 'Visitor', path: '/visitor', icon: UserPlus },
+  { name: 'Memberships',path: '/memberships',icon: CreditCard },
+  { name: 'Visitor',   path: '/visitor',    icon: UserPlus },
+  { name: 'Closing',   path: '/closing',    icon: CheckSquare },
 ];
 
 const memberNavItems = [
@@ -210,7 +212,7 @@ export default function MainLayout() {
       <div className="lg:ml-64 flex flex-col h-screen transition-all duration-500">
         <Header toggleSidebar={toggleSidebar} />
         
-        <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-6 sm:p-10 pb-40 lg:pb-12 relative">
+        <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-10 pb-32 lg:pb-12 relative">
           <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10">
             <Outlet />
           </div>

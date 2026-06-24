@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CreditCard,
-  UserCheck
+  UserCheck,
+  CheckSquare
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { getISTDateString, getISTTimeString, getISTDisplayDate } from '../utils/dateUtils';
@@ -38,7 +39,7 @@ const PURPOSES = [
 ];
 
 export default function Visitor() {
-  const { visitors = [], addVisitor, updateVisitor, deleteVisitor, dataLoading, convertVisitorToMember } = useAppContext();
+  const { visitors = [], addVisitor, updateVisitor, deleteVisitor, dataLoading, convertVisitorToMember, addClosing, closings = [], user } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -185,6 +186,21 @@ export default function Visitor() {
     } catch (error) {
       console.error('Conversion failed:', error);
       toast.error(error.message || 'Failed to assign membership.');
+    }
+  };
+
+  const handleAddToClosing = async (visitor) => {
+    try {
+      await addClosing(visitor, user);
+      toast.success(`${visitor.visitor_name} has been added to the Closing section!`);
+      setActiveDropdown(null);
+    } catch (error) {
+      if (error.message?.includes('already been added')) {
+        toast.warn('This visitor has already been added to the Closing section.');
+      } else {
+        toast.error(`Failed to add to Closing: ${error.message || 'Unknown error'}`);
+      }
+      setActiveDropdown(null);
     }
   };
 
@@ -399,7 +415,7 @@ export default function Visitor() {
                         <MoreVertical size={18} />
                       </button>
                       {activeDropdown === visitor.id && (
-                        <div className="absolute right-12 top-10 w-44 bg-white rounded-2xl shadow-2xl border border-beige z-20 overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="absolute right-12 top-10 w-52 bg-white rounded-2xl shadow-2xl border border-beige z-20 overflow-hidden animate-in zoom-in-95 duration-200">
                           <button
                             onClick={() => handleConvertToMember(visitor)}
                             className="w-full px-5 py-4 text-left text-[10px] font-black uppercase tracking-widest text-forest hover:bg-offwhite transition-colors flex items-center border-b border-beige/40"
@@ -411,6 +427,19 @@ export default function Visitor() {
                             className="w-full px-5 py-4 text-left text-[10px] font-black uppercase tracking-widest text-forest hover:bg-offwhite transition-colors flex items-center border-b border-beige/40"
                           >
                             <CreditCard size={14} className="mr-3 text-gold" /> Membership
+                          </button>
+                          <button
+                            onClick={() => handleAddToClosing(visitor)}
+                            className={`w-full px-5 py-4 text-left text-[10px] font-black uppercase tracking-widest transition-colors flex items-center border-b border-beige/40 ${
+                              closings.some(c => c.visitor_id === visitor.id)
+                                ? 'text-muted/40 cursor-not-allowed bg-offwhite/50'
+                                : 'text-[#0891B2] hover:bg-[#CFFAFE]/40'
+                            }`}
+                            disabled={closings.some(c => c.visitor_id === visitor.id)}
+                            title={closings.some(c => c.visitor_id === visitor.id) ? 'Already in Closing' : 'Add to Closing'}
+                          >
+                            <CheckSquare size={14} className={`mr-3 ${closings.some(c => c.visitor_id === visitor.id) ? 'text-muted/30' : 'text-[#0891B2]'}`} />
+                            {closings.some(c => c.visitor_id === visitor.id) ? 'In Closing ✓' : 'Closing'}
                           </button>
                           <button
                             onClick={() => handleOpenEdit(visitor)}

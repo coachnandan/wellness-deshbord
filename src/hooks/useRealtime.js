@@ -14,12 +14,14 @@ export default function useRealtime({
   setNotifications,
   setAttendanceLocks,
   setVisitors,
+  setClosings,
   customersRef,
   attendanceRef,
   membershipsRef,
   notificationsRef,
   attendanceLocksRef,
   visitorsRef,
+  closingsRef,
 }) {
   useEffect(() => {
     if (!supabase) return;
@@ -48,6 +50,21 @@ export default function useRealtime({
       { name: "notification_logs", set: setNotifications, ref: notificationsRef },
       { name: "attendance_locks", set: setAttendanceLocks, ref: attendanceLocksRef, idKey: "date" },
       { name: "visitor_logs", set: setVisitors, ref: visitorsRef },
+      { 
+        name: "closing", 
+        set: (record) => {
+          // Map DB record to our app format before storing
+          const mapped = { ...record, visitorId: record.visitor_id, markedBy: record.created_by_user_name };
+          if (closingsRef && closingsRef.current) {
+            const current = closingsRef.current;
+            const idx = current.findIndex(c => c.id === mapped.id);
+            const newArr = idx >= 0 ? [...current] : [...current, mapped];
+            if (idx >= 0) newArr[idx] = mapped;
+            setClosings(newArr);
+          }
+        }, 
+        ref: closingsRef 
+      },
     ];
 
     tables.forEach(({ name, set, ref, idKey = "id" }) => {

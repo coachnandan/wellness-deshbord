@@ -97,6 +97,7 @@ const ShakeTypeDropdown = ({ value, onChange, disabled }) => {
       case 'S': return 'bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white border-[#D97706] shadow-md shadow-[#D97706]/30';
       case 'SB': return 'bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white border-[#7C3AED] shadow-md shadow-[#7C3AED]/30';
       case 'SF': return 'bg-gradient-to-br from-[#06B6D4] to-[#0891B2] text-white border-[#0891B2] shadow-md shadow-[#0891B2]/30';
+      case 'SBF': return 'bg-gradient-to-br from-[#F59E0B] to-[#0891B2] text-white border-[#0891B2] shadow-md shadow-[#0891B2]/30';
       default: return 'bg-white/80 backdrop-blur-md text-forest border-beige hover:border-sage/40 hover:bg-white shadow-sm';
     }
   };
@@ -105,6 +106,7 @@ const ShakeTypeDropdown = ({ value, onChange, disabled }) => {
     if (remark === 'S') return 'S · Shake';
     if (remark === 'SB') return 'SB · +Beta';
     if (remark === 'SF') return 'SF · +Fiber';
+    if (remark === 'SBF') return 'SBF · +Beta+Fiber';
     return 'Select Type';
   };
 
@@ -125,7 +127,8 @@ const ShakeTypeDropdown = ({ value, onChange, disabled }) => {
           {[
             { id: 'S', label: 'Shake', icon: <Clock size={14}/>, color: 'text-[#D97706]', bgHover: 'hover:bg-[#FEF3C7]' },
             { id: 'SB', label: 'Shake + Beta', icon: <Heart size={14}/>, color: 'text-[#7C3AED]', bgHover: 'hover:bg-[#F3E8FF]' },
-            { id: 'SF', label: 'Shake + Fiber', icon: <Sparkles size={14}/>, color: 'text-[#0891B2]', bgHover: 'hover:bg-[#CFFAFE]' }
+            { id: 'SF', label: 'Shake + Fiber', icon: <Sparkles size={14}/>, color: 'text-[#0891B2]', bgHover: 'hover:bg-[#CFFAFE]' },
+            { id: 'SBF', label: 'Shake + Beta + Fiber', icon: <Heart size={14}/>, color: 'text-[#D97706]', bgHover: 'hover:bg-[#FEF3C7]' }
           ].map((opt) => (
             <button
               key={opt.id}
@@ -183,9 +186,10 @@ export default function Attendance() {
     total: customers.length || 0,
     present: selectedAttendance.filter(a => a.status === 'Present').length || 0,
     absent: selectedAttendance.filter(a => a.status === 'Absent').length || 0,
-    shakes: selectedAttendance.filter(a => ['S', 'SB', 'SF'].includes(a.remark)).length || 0,
+    shakes: selectedAttendance.filter(a => ['S', 'SB', 'SF', 'SBF'].includes(a.remark)).length || 0,
     sb: selectedAttendance.filter(a => a.remark === 'SB').length || 0,
     sf: selectedAttendance.filter(a => a.remark === 'SF').length || 0,
+    sbf: selectedAttendance.filter(a => a.remark === 'SBF').length || 0,
     s_only: selectedAttendance.filter(a => a.remark === 'S').length || 0,
   };
 
@@ -202,7 +206,7 @@ export default function Attendance() {
           if (att.status === 'Present') dayObj.present++;
           else if (att.status === 'Absent') dayObj.absent++;
           
-          if (['S', 'SB', 'SF'].includes(att.remark)) dayObj.shake++;
+          if (['S', 'SB', 'SF', 'SBF'].includes(att.remark)) dayObj.shake++;
         }
       }
     });
@@ -238,8 +242,8 @@ export default function Attendance() {
     }
   };
 
-  const DAILY_RATES = { 'S': 250, 'SB': 418, 'SF': 348 };
-  const REMARK_LABELS = { 'S': 'Shake', 'SB': 'Shake + Beta Heart', 'SF': 'Shake + Fiber' };
+  const DAILY_RATES = { 'S': 250, 'SB': 418, 'SF': 348, 'SBF': 481 };
+  const REMARK_LABELS = { 'S': 'Shake', 'SB': 'Shake + Beta Heart', 'SF': 'Shake + Fiber', 'SBF': 'Shake + Beta + Fiber' };
 
   const getRemarkDaysCount = (customerId, remarkType) => {
     const uniqueDates = new Set(
@@ -254,7 +258,7 @@ export default function Attendance() {
     const customer = customers.find(c => c.id === customerId);
     
     // Auto-trigger payment modal logic for all shakes
-    if (['S', 'SB', 'SF'].includes(remarkValue)) {
+    if (['S', 'SB', 'SF', 'SBF'].includes(remarkValue)) {
       const days = getRemarkDaysCount(customerId, remarkValue);
       const dailyRate = DAILY_RATES[remarkValue];
       setPaymentModal({ customerId, customerName: customer?.name || 'Unknown', remark: remarkValue, days, dailyRate, totalAmount: days * dailyRate });
@@ -427,6 +431,13 @@ export default function Attendance() {
                   </span>
                   <span className="text-sm font-extrabold text-[#0891B2]">{stats.sf}</span>
                 </button>
+                <button onClick={(e) => { e.stopPropagation(); setShowShakeMembers('SBF'); setIsShakeDropdownOpen(false); }} className="flex justify-between items-center w-full px-3 py-2.5 rounded-xl hover:bg-offwhite transition-colors group/btn">
+                  <span className="text-[10px] font-black text-forest uppercase tracking-widest flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md bg-[#FFE5B4] text-[#D97706] flex items-center justify-center transition-transform group-hover/btn:scale-110"><Heart size={12}/></div>
+                    SBF (Beta+Fiber)
+                  </span>
+                  <span className="text-sm font-extrabold text-[#D97706]">{stats.sbf}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -495,6 +506,9 @@ export default function Attendance() {
                 <option value="Present">Present</option>
                 <option value="Absent">Absent</option>
                 <option value="S">Shake</option>
+                <option value="SB">Shake + Beta</option>
+                <option value="SF">Shake + Fiber</option>
+                <option value="SBF">Shake + Beta + Fiber</option>
                 <option value="Pending">Pending</option>
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" size={14} />
@@ -506,12 +520,12 @@ export default function Attendance() {
         </div>
 
         {/* 4-Column Table */}
-        <div className="overflow-x-visible">
+        <div className="overflow-x-auto no-scrollbar pb-32">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-white text-muted text-[10px] font-black uppercase tracking-[0.15em] border-b border-beige">
                 <th className="px-8 py-6">Member Profile</th>
-                <th className="px-6 py-6">Marked By</th>
+                <th className="px-6 py-6 hidden md:table-cell">Marked By</th>
                 <th className="px-6 py-6 text-center">Status</th>
                 <th className="px-6 py-6">Shake Type</th>
               </tr>
@@ -542,7 +556,7 @@ export default function Attendance() {
                     </td>
 
                     {/* Marked By Column */}
-                    <td className="px-6 py-5">
+                    <td className="px-6 py-5 hidden md:table-cell">
                       {record ? (
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-offwhite border border-beige flex items-center justify-center text-muted shrink-0 shadow-sm transition-colors group-hover:bg-white">
@@ -624,10 +638,11 @@ export default function Attendance() {
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
                   showShakeMembers === 'S' ? 'bg-[#FEF3C7] text-[#D97706]' :
-                  showShakeMembers === 'SB' ? 'bg-[#F3E8FF] text-[#7C3AED]' : 'bg-[#CFFAFE] text-[#0891B2]'
+                  showShakeMembers === 'SB' ? 'bg-[#F3E8FF] text-[#7C3AED]' :
+                  showShakeMembers === 'SF' ? 'bg-[#CFFAFE] text-[#0891B2]' :
+                  showShakeMembers === 'SBF' ? 'bg-[#FFE5B4] text-[#D97706]' : ''
                 }`}>
-                  {showShakeMembers === 'S' ? <Clock size={20} /> : showShakeMembers === 'SB' ? <Heart size={20} /> : <Sparkles size={20} />}
-                </div>
+                  {showShakeMembers === 'S' ? <Clock size={20} /> : showShakeMembers === 'SB' ? <Heart size={20} /> : showShakeMembers === 'SF' ? <Sparkles size={20} /> : <Heart size={20} />}</div>
                 <div>
                   <h3 className="text-xl font-extrabold text-forest">{REMARK_LABELS[showShakeMembers]} Members</h3>
                   <p className="text-xs text-muted font-bold mt-1">Real-time sync for {getISTDisplayDate(selectedDate)}</p>

@@ -240,14 +240,14 @@ export default function Dashboard() {
                     <div className="w-12 h-12 rounded-2xl bg-offwhite border border-beige text-forest flex items-center justify-center font-black text-base mr-4 transition-all group-hover:scale-110 group-hover:bg-forest group-hover:text-white group-hover:border-forest shadow-sm">
                       {customer?.name?.charAt(0) || '?'}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p
                         onClick={() => customer && setEditingCustomer(customer)}
-                        className="text-base font-extrabold text-forest cursor-pointer hover:text-sage transition-colors"
+                        className="text-base font-extrabold text-forest cursor-pointer hover:text-sage transition-colors truncate"
                       >
                         {customer?.name || 'Unknown'}
                       </p>
-                      <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em] mt-1">{customer?.address?.split(',')[0] || 'Unknown Location'}</p>
+                      <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em] mt-1 truncate">{customer?.address?.split(',')[0] || 'Unknown Location'}</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
@@ -297,19 +297,19 @@ export default function Dashboard() {
                     <div className="w-11 h-11 rounded-2xl bg-offwhite border border-beige text-forest flex items-center justify-center font-black text-sm mr-4 transition-all group-hover:scale-110 group-hover:bg-forest group-hover:text-white group-hover:border-forest shadow-sm">
                       {visitor.visitor_name?.charAt(0) || '?'}
                     </div>
-                    <div>
-                      <p className="text-sm font-extrabold text-forest leading-tight">
+                    <div className="min-w-0 flex-1 mr-2">
+                      <p className="text-sm font-extrabold text-forest leading-tight truncate">
                         {visitor.visitor_name || 'Unknown'}
                       </p>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                         {visitor.mobile_number && (
-                          <p className="text-[10px] font-bold text-muted flex items-center">
-                            <Phone size={9} className="mr-1 text-sage" />{visitor.mobile_number}
+                          <p className="text-[10px] font-bold text-muted flex items-center whitespace-nowrap">
+                            <Phone size={9} className="mr-1 text-sage shrink-0" />{visitor.mobile_number}
                           </p>
                         )}
                         {visitor.visit_time && (
-                          <p className="text-[10px] font-bold text-muted flex items-center">
-                            <Clock size={9} className="mr-1 text-gold" />{visitor.visit_time}
+                          <p className="text-[10px] font-bold text-muted flex items-center whitespace-nowrap">
+                            <Clock size={9} className="mr-1 text-gold shrink-0" />{visitor.visit_time}
                           </p>
                         )}
                       </div>

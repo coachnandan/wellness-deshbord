@@ -37,6 +37,9 @@
   * {
     @apply border-[var(--border)];
   }
+  html, body {
+    overflow-x: hidden;
+  }
   body {
     @apply bg-[var(--background)] text-[var(--foreground)];
     font-family: 'Manrope', sans-serif;

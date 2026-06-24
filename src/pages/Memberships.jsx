@@ -254,25 +254,25 @@ export default function Memberships() {
       const totalAmount = parseFloat(newTotalAmount) || 0;
       const advanceAmount = parseFloat(newAdvanceAmount) || 0;
       const remainingAmount = Math.max(0, totalAmount - advanceAmount);
-      let statusDetail = 'Pending';
-      if (remainingAmount === 0) statusDetail = 'Fully Paid';
+      let statusDetail = 'Unpaid';
+      if (remainingAmount === 0) statusDetail = 'Paid';
       else if (remainingAmount > 0 && advanceAmount > 0) statusDetail = 'Partially Paid';
-      
+
       const updates = {
         amount: totalAmount,
         total_amount: totalAmount,
         advance_amount: advanceAmount,
         remaining_amount: remainingAmount,
         payment_status_detail: statusDetail,
-        payment_status: statusDetail === 'Pending' ? 'Pending' : 'Paid'
+        payment_status: statusDetail === 'Unpaid' ? 'Unpaid' : (statusDetail === 'Paid' ? 'Paid' : 'Partially Paid')
       };
-      
+
       const { data } = await updateMembership(activeMembership.id, updates, 'PaymentUpdated', `Advance amount updated to ₹${advanceAmount}`);
       if (data && data[0]) setActiveMembership({ ...activeMembership, ...data[0], customerId: data[0].client_id, plan: data[0].membership_plan, expiryDate: data[0].expiry_date });
-      
+
       const logsData = await fetchMembershipActivityLogs(activeMembership.id);
       setActivityLogs(logsData);
-      
+
       toast.success('Payment details updated');
       setIsEditPaymentModalOpen(false);
     } catch (error) {
@@ -292,8 +292,8 @@ export default function Memberships() {
       const totalAmount = newPlanData.total_amount !== undefined ? parseFloat(newPlanData.total_amount) : (planMap[newPlanData.plan] || 0);
       const advanceAmount = parseFloat(activeMembership.advance_amount || 0);
       const remainingAmount = Math.max(0, totalAmount - advanceAmount);
-      let statusDetail = 'Pending';
-      if (remainingAmount === 0) statusDetail = 'Fully Paid';
+      let statusDetail = 'Unpaid';
+      if (remainingAmount === 0) statusDetail = 'Paid';
       else if (remainingAmount > 0 && advanceAmount > 0) statusDetail = 'Partially Paid';
 
       const updates = {
@@ -302,12 +302,12 @@ export default function Memberships() {
         total_amount: totalAmount,
         remaining_amount: remainingAmount,
         payment_status_detail: statusDetail,
-        payment_status: statusDetail === 'Pending' ? 'Pending' : 'Paid'
+        payment_status: statusDetail === 'Unpaid' ? 'Unpaid' : (statusDetail === 'Paid' ? 'Paid' : 'Partially Paid')
       };
 
       const { data } = await updateMembership(activeMembership.id, updates, 'PlanChanged', `Plan changed to ${newPlanData.plan}`);
       if (data && data[0]) setActiveMembership({ ...activeMembership, ...data[0], customerId: data[0].client_id, plan: data[0].membership_plan, expiryDate: data[0].expiry_date });
-      
+
       const logsData = await fetchMembershipActivityLogs(activeMembership.id);
       setActivityLogs(logsData);
 
@@ -415,7 +415,7 @@ export default function Memberships() {
             <Filter size={18} className="text-sage" />
             <h3 className="text-xl font-extrabold text-forest tracking-tight">Enrollment Directory</h3>
           </div>
-          <div className="flex p-1.5 bg-offwhite rounded-[1.25rem] border border-beige w-full sm:w-auto">
+          <div className="flex p-1.5 bg-offwhite rounded-[1.25rem] border border-beige w-full sm:w-auto overflow-x-auto no-scrollbar">
             {['All', 'Active', 'Pending', 'Expired'].map((status) => (
               <button
                 key={status}
@@ -1044,7 +1044,39 @@ export default function Memberships() {
                               <CreditCard size={20} />
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-6">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Start Date</p>
+                              <p className="text-sm font-bold text-forest">
+                                {activeMembership.start_date || activeMembership.startDate
+                                  ? new Date(activeMembership.start_date || activeMembership.startDate).toLocaleDateString('en-IN')
+                                  : 'N/A'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Expiry Date</p>
+                              <p className="text-sm font-bold text-forest">
+                                {activeMembership.expiry_date || activeMembership.expiryDate
+                                  ? new Date(activeMembership.expiry_date || activeMembership.expiryDate).toLocaleDateString('en-IN')
+                                  : 'N/A'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Duration</p>
+                              <p className="text-sm font-bold text-forest">{activeMembership.duration_days || '—'} Days</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Membership Status</p>
+                              {(() => {
+                                const today = new Date(); today.setHours(0,0,0,0);
+                                const expiry = new Date(activeMembership.expiry_date || activeMembership.expiryDate);
+                                const mStatus = expiry < today ? 'Expired' : (activeMembership.status || 'Active');
+                                const sc = mStatus === 'Active' ? 'text-[#1F7A45] bg-[#DDF5E5] border-[#DDF5E5]'
+                                  : mStatus === 'Expired' ? 'text-[#B42318] bg-[#FDE2E2] border-[#FDE2E2]'
+                                  : 'text-amber-600 bg-amber-50 border-amber-200';
+                                return <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${sc}`}>{mStatus}</span>;
+                              })()}
+                            </div>
                             <div>
                               <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Total Amount</p>
                               <p className="text-lg font-extrabold text-sage">
@@ -1058,16 +1090,20 @@ export default function Memberships() {
                               </p>
                             </div>
                             <div>
-                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Balance Due</p>
+                              <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Due Amount</p>
                               <p className="text-lg font-extrabold text-red-500">
                                 ₹{(activeMembership.remaining_amount ?? 0).toLocaleString('en-IN')}
                               </p>
                             </div>
                             <div>
                               <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Payment Status</p>
-                              <p className="text-sm font-extrabold text-forest">
-                                {activeMembership.payment_status_detail || activeMembership.payment_status || 'Paid'}
-                              </p>
+                              {(() => {
+                                const ps = activeMembership.payment_status_detail || activeMembership.payment_status || 'Unpaid';
+                                const pc = ps === 'Paid' ? 'text-[#1F7A45] bg-[#DDF5E5] border-[#DDF5E5]'
+                                  : ps === 'Partially Paid' ? 'text-amber-600 bg-amber-50 border-amber-200'
+                                  : 'text-red-600 bg-red-50 border-red-100';
+                                return <span className={`inline-flex items-center px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${pc}`}>{ps}</span>;
+                              })()}
                             </div>
                             {activeMembership?.extra_type && (
                               <>

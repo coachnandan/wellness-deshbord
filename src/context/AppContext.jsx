@@ -26,6 +26,7 @@ export const AppProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [attendanceLocks, setAttendanceLocks] = useState([]);
   const [visitors, setVisitors] = useState([]);
+  const [closings, setClosings] = useState([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
 
@@ -41,6 +42,7 @@ export const AppProvider = ({ children }) => {
   const notificationsRef = React.useRef([]);
   const attendanceLocksRef = React.useRef([]);
   const visitorsRef = React.useRef([]);
+  const closingsRef = React.useRef([]);
 
   useEffect(() => {
     customersRef.current = customers;
@@ -49,7 +51,8 @@ export const AppProvider = ({ children }) => {
     notificationsRef.current = notifications;
     attendanceLocksRef.current = attendanceLocks;
     visitorsRef.current = visitors;
-  }, [customers, attendance, memberships, notifications, attendanceLocks, visitors]);
+    closingsRef.current = closings;
+  }, [customers, attendance, memberships, notifications, attendanceLocks, visitors, closings]);
 
   // Initialize realtime subscriptions after auth is resolved
   useRealtime({
@@ -60,12 +63,14 @@ export const AppProvider = ({ children }) => {
     setNotifications,
     setAttendanceLocks,
     setVisitors,
+    setClosings,
     customersRef,
     attendanceRef,
     membershipsRef,
     notificationsRef,
     attendanceLocksRef,
     visitorsRef,
+    closingsRef,
   });
 
   // Cache for resolved profiles to avoid repeated DB queries
@@ -283,6 +288,27 @@ export const AppProvider = ({ children }) => {
         setVisitors([]);
       } else if (visitorData) {
         setVisitors(visitorData);
+      }
+
+      const { data: closingData, error: closingError } = await supabase
+        .from('closing')
+        .select('*')
+        .gte('visit_date', getISTDateString(thirtyOneDaysAgo))
+        .order('created_at', { ascending: false });
+        
+      if (closingError) {
+        if (closingError.code === 'PGRST205' || closingError.message?.includes('404') || closingError.message?.includes('does not exist')) {
+          console.warn('[Data] closing table not found. Skipping closings sync.');
+        } else {
+          console.error('[Data] closing fetch error:', closingError.message);
+        }
+        setClosings([]);
+      } else if (closingData) {
+        setClosings(closingData.map(c => ({
+          ...c,
+          visitorId: c.visitor_id,
+          markedBy: c.created_by_user_name // updated mapping based on new schema
+        })));
       }
 
     } catch (error) {
@@ -634,23 +660,51 @@ export const AppProvider = ({ children }) => {
   const addMembership = async (membershipData) => {
     const markerName = user?.name || user?.email?.split('@')[0] || 'System Admin';
     const clientName = customers.find(c => c.id === membershipData.customerId)?.name || membershipData.customerName || 'Unknown';
-    
+
+    // --- Payment calculation ---
+    const totalAmount = parseFloat(membershipData.totalAmount ?? membershipData.amount ?? 0);
+    const advanceAmount = parseFloat(membershipData.advanceAmount ?? totalAmount);
+    const remainingAmount = Math.max(0, totalAmount - advanceAmount);
+
+    let paymentStatusDetail = 'Unpaid';
+    if (remainingAmount === 0) {
+      paymentStatusDetail = 'Paid';
+    } else if (advanceAmount > 0 && remainingAmount > 0) {
+      paymentStatusDetail = 'Partially Paid';
+    }
+
+    // --- Expiry date calculation ---
+    const durationDays = membershipData.durationDays || 30;
+    let expiryDateStr = membershipData.expiryDate;
+    if (!expiryDateStr && membershipData.startDate) {
+      const startD = new Date(membershipData.startDate);
+      startD.setDate(startD.getDate() + durationDays);
+      expiryDateStr = startD.toISOString().split('T')[0];
+    }
+    if (!expiryDateStr) {
+      expiryDateStr = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
+
     const insertPayload = {
       client_id: membershipData.customerId,
       client_name: clientName,
       membership_plan: membershipData.plan,
-      duration_days: membershipData.durationDays || 30,
-      amount: membershipData.amount,
+      duration_days: durationDays,
+      amount: totalAmount,
+      total_amount: totalAmount,
+      advance_amount: advanceAmount,
+      remaining_amount: remainingAmount,
+      payment_status_detail: paymentStatusDetail,
       start_date: membershipData.startDate,
-      expiry_date: membershipData.expiryDate || new Date(Date.now() + (membershipData.durationDays || 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      expiry_date: expiryDateStr,
       status: 'Active',
-      payment_status: 'Paid',
+      payment_status: paymentStatusDetail === 'Unpaid' ? 'Unpaid' : (paymentStatusDetail === 'Paid' ? 'Paid' : 'Partially Paid'),
       renewal_status: 'New',
-      remaining_days: membershipData.durationDays || 30,
+      remaining_days: durationDays,
       created_by_user_id: user?.id || null,
       created_by_name: markerName
     };
-    
+
     console.log('[addMembership] Insert payload:', insertPayload);
     const { data, error } = await supabase
       .from('memberships')
@@ -761,10 +815,10 @@ export const AppProvider = ({ children }) => {
     const totalAmount = data.total_amount ? parseFloat(data.total_amount) : (planMap[data.plan] || 0);
     const advanceAmount = data.advance_amount ? parseFloat(data.advance_amount) : totalAmount;
     const remainingAmount = Math.max(0, (totalAmount || 0) - (advanceAmount || 0));
-    
-    let paymentStatusDetail = 'Pending';
+
+    let paymentStatusDetail = 'Unpaid';
     if (remainingAmount === 0) {
-      paymentStatusDetail = 'Fully Paid';
+      paymentStatusDetail = 'Paid';
     } else if (remainingAmount > 0 && advanceAmount > 0) {
       paymentStatusDetail = 'Partially Paid';
     }
@@ -787,7 +841,7 @@ export const AppProvider = ({ children }) => {
       start_date: startDate.toISOString().split('T')[0],
       expiry_date: expiryDate.toISOString().split('T')[0],
       status: 'Active',
-      payment_status: paymentStatusDetail === 'Pending' ? 'Pending' : 'Paid',
+      payment_status: paymentStatusDetail === 'Unpaid' ? 'Unpaid' : (paymentStatusDetail === 'Paid' ? 'Paid' : 'Partially Paid'),
       renewal_status: 'New',
       created_by_user_id: user?.id || null,
       created_by_name: creatorName,
@@ -1185,6 +1239,107 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // ── Add Closing from Visitor (with duplicate prevention) ───────────────────
+  const addClosing = async (visitor, currentUser) => {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    // Check for existing closing record for this visitor
+    const existing = closingsRef.current.find(c => c.visitor_id === visitor.id);
+    if (existing) {
+      throw new Error('This visitor has already been added to the Closing section.');
+    }
+
+    // Also double-check in the DB to be safe (race condition prevention)
+    const { data: dbCheck } = await supabase
+      .from('closing')
+      .select('id')
+      .eq('visitor_id', visitor.id)
+      .maybeSingle();
+    if (dbCheck) {
+      throw new Error('This visitor has already been added to the Closing section.');
+    }
+
+    const now = new Date();
+    const insertPayload = {
+      visitor_id: visitor.id,
+      visitor_name: visitor.visitor_name || '',
+      contact_number: visitor.mobile_number || '',
+      visit_date: visitor.visit_date || getISTDateString(),
+      visit_time: visitor.visit_time || getISTTimeString(),
+      status: 'Pending',
+      selected_type: 'Pending',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      created_by_user_id: currentUser?.id || null,
+      created_by_user_name: currentUser?.name || currentUser?.email || 'Admin',
+    };
+
+    const { data: closingData, error } = await supabase
+      .from('closing')
+      .insert(insertPayload)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const mappedRecord = {
+      ...closingData,
+      visitorId: closingData.visitor_id,
+      markedBy: closingData.created_by_user_name,
+    };
+
+    setClosings(prev => [...prev, mappedRecord]);
+    return mappedRecord;
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const updateClosing = async (record) => {
+    // Record is now visitor-based
+    const visitor = visitors.find(v => v.id === record.visitorId);
+    const now = new Date();
+    
+    const existing = closingsRef.current.find(
+      c => c.visitor_id === record.visitorId
+    );
+
+    const upsertPayload = {
+      visitor_id: record.visitorId,
+      status: record.status !== undefined ? record.status : (existing?.status || 'Pending'),
+      selected_type: record.selectedType !== undefined ? record.selectedType : (existing?.selected_type || 'Pending'),
+      updated_at: now.toISOString()
+    };
+
+    const { data: closingData, error: closingErr } = await supabase
+      .from('closing')
+      .upsert(upsertPayload, { onConflict: 'visitor_id' })
+      .select();
+
+    if (closingErr) throw closingErr;
+
+    const mappedRecord = { 
+      ...closingData[0], 
+      visitorId: closingData[0].visitor_id, 
+      markedBy: closingData[0].created_by_user_name 
+    };
+    
+    setClosings(prev => {
+      const idx = prev.findIndex(c => c.visitor_id === record.visitorId);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = { ...prev[idx], ...mappedRecord };
+        return updated;
+      }
+      return [...prev, mappedRecord];
+    });
+    
+    return { data: closingData[0] };  };
+
+  const deleteClosing = async (id) => {
+    const { error } = await supabase.from('closing').delete().eq('id', id);
+    if (error) throw error;
+    setClosings(prev => prev.filter(c => c.id !== id));
+  };
+
   if (!isConfigured) {
     return <ConfigErrorScreen />;
   }
@@ -1198,6 +1353,7 @@ export const AppProvider = ({ children }) => {
       attendance, updateAttendance, setAttendance, fetchMonthlyAttendance, attendanceLocks, finalizeAttendance,
       memberships, addMembership, renewMembership, addNewMember, fetchData, convertVisitorToMember, updateMembership, deleteMembership, fetchMembershipActivityLogs,
       notifications, setNotifications, sendWhatsAppAlert,
+      closings, addClosing, updateClosing,
       dataLoading
     }}>
       {children}
