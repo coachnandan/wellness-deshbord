@@ -47,27 +47,29 @@ export default function Memberships() {
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
-      plan: 'Monthly Flow',
-      total_amount: 15000,
-      advance_amount: 15000
+      plan: '3 Days',
+      total_amount: 729,
+      advance_amount: 729
     }
   });
 
   const watchPlan = watch('plan');
   const watchTotal = watch('total_amount');
   const watchAdvance = watch('advance_amount');
+  const watchCustomDuration = watch('custom_duration');
+
+  // Shared plan config — keep in sync with Customers.jsx membership form
+  const PLAN_DURATION_MAP = { '3 Days': 3, '10 Days': 10, '30 Days': 30 };
+  const PLAN_AMOUNT_MAP   = { '3 Days': 729, '10 Days': 2500, '30 Days': 7000 };
 
   // Auto-update total amount when plan changes
   useMemo(() => {
-    const planMap = {
-      'Monthly Flow': 15000,
-      'Quarterly Balance': 40000,
-      'Annual Harmony': 150000,
-      'Custom': ''
-    };
-    if (watchPlan && watchPlan !== 'Custom') {
-      setValue('total_amount', planMap[watchPlan]);
-      setValue('advance_amount', planMap[watchPlan]);
+    if (watchPlan && watchPlan !== 'Other') {
+      setValue('total_amount', PLAN_AMOUNT_MAP[watchPlan] ?? '');
+      setValue('advance_amount', PLAN_AMOUNT_MAP[watchPlan] ?? '');
+    } else if (watchPlan === 'Other') {
+      setValue('total_amount', '');
+      setValue('advance_amount', '');
     }
   }, [watchPlan, setValue]);
 
@@ -107,6 +109,7 @@ export default function Memberships() {
     if (!data.membership_start_date) missing.push('Membership Start Date');
     if (!data.plan) missing.push('Membership Plan');
     if (data.total_amount === undefined || data.total_amount === '' || data.total_amount === null) missing.push('Total Amount');
+    if (data.plan === 'Other' && (!data.custom_duration || parseInt(data.custom_duration) < 1)) missing.push('Custom Duration (minimum 1 day)');
     if (!user?.id) missing.push('Created By User ID (not logged in)');
 
     if (missing.length > 0) {
@@ -285,9 +288,9 @@ export default function Memberships() {
     if (!activeMembership) return;
     try {
       const planMap = {
-        'Monthly Flow': 15000,
-        'Quarterly Balance': 40000,
-        'Annual Harmony': 150000
+        '3 Days': 729,
+        '10 Days': 2500,
+        '30 Days': 7000
       };
       const totalAmount = newPlanData.total_amount !== undefined ? parseFloat(newPlanData.total_amount) : (planMap[newPlanData.plan] || 0);
       const advanceAmount = parseFloat(activeMembership.advance_amount || 0);
@@ -658,24 +661,10 @@ export default function Memberships() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* Profile Section */}
-                <div className="md:col-span-1 space-y-6">
-                  <div className="w-full aspect-square bg-offwhite border-2 border-dashed border-beige rounded-[2.5rem] flex flex-col items-center justify-center text-muted group hover:border-sage transition-colors cursor-pointer">
-                    <Plus size={40} className="mb-3 text-beige group-hover:text-sage transition-colors" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">Upload Profile</p>
-                  </div>
-                  <div className="p-6 bg-offwhite/50 rounded-3xl border border-beige">
-                    <p className="text-[10px] font-black text-forest uppercase tracking-widest mb-3">Onboarding Coach</p>
-                    <div className="flex items-center">
-                      <div className="w-8 h-8 rounded-lg bg-forest text-white flex items-center justify-center font-bold text-[10px] mr-3 uppercase">{user?.name?.charAt(0) || 'A'}</div>
-                      <p className="text-sm font-extrabold text-forest">{user?.name || 'Coach Aditi'}</p>
-                    </div>
-                  </div>
-                </div>
+              <div className="w-full">
 
                 {/* Fields Section */}
-                <div className="md:col-span-2 space-y-10">
+                <div className="space-y-10">
                   {enrollmentStep === 1 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                       <div className="space-y-2 md:col-span-2">
@@ -776,12 +765,13 @@ export default function Memberships() {
                   )}
 
                   {enrollmentStep === 3 && (() => {
+                    const isOtherPlan = watchPlan === 'Other';
                     const tAmt = parseFloat(watchTotal) || 0;
                     const aAmt = parseFloat(watchAdvance) || 0;
                     const rAmt = Math.max(0, tAmt - aAmt);
                     let statusBadge = 'Pending';
                     let badgeColor = 'bg-[#FEF9C3] text-[#A16207] border-[#FEF08A]';
-                    if (rAmt === 0) {
+                    if (rAmt === 0 && tAmt > 0) {
                       statusBadge = 'Fully Paid';
                       badgeColor = 'bg-[#DDF5E5] text-[#1F7A45] border-[#DDF5E5]';
                     } else if (rAmt > 0 && aAmt > 0) {
@@ -792,33 +782,81 @@ export default function Memberships() {
                     return (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                         <div className="space-y-2 md:col-span-2">
-                          <h3 className="text-sm font-extrabold text-forest mb-2">Step 3: Membership & Payment</h3>
+                          <h3 className="text-sm font-extrabold text-forest mb-2">Step 3: Membership Details</h3>
                         </div>
+
+                        {/* Row 1: Start Date + Plan */}
                         <div className="space-y-2">
                           <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Membership Start Date</label>
                           <input {...register("membership_start_date")} type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" />
                         </div>
                         <div className="space-y-2">
-                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Active Plan</label>
-                          <select {...register("plan")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none">
-                            <option value="Monthly Flow">Monthly Flow (₹15,000)</option>
-                            <option value="Quarterly Balance">Quarterly Balance (₹40,000)</option>
-                            <option value="Annual Harmony">Annual Harmony (₹1,50,000)</option>
-                            <option value="Custom">Custom Plan</option>
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Membership Plan *</label>
+                          <select
+                            {...register("plan")}
+                            className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none"
+                          >
+                            <option value="3 Days">3 Days (₹729)</option>
+                            <option value="10 Days">10 Days (₹2,500)</option>
+                            <option value="30 Days">30 Days (₹7,000)</option>
+                            <option value="Other">Other (Custom)</option>
                           </select>
                         </div>
+
+                        {/* Custom Duration — only shown when Other is selected */}
+                        {isOtherPlan && (
+                          <div className="md:col-span-2 p-5 bg-amber-50/60 border border-amber-200/60 rounded-2xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <p className="text-[9px] font-black text-amber-700 uppercase tracking-[0.25em]">✦ Custom Plan Configuration</p>
+                            <div>
+                              <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Custom Duration (Days) *</label>
+                              <input
+                                type="number"
+                                {...register("custom_duration", { required: isOtherPlan ? 'Custom duration is required' : false })}
+                                min="1"
+                                max="3650"
+                                className="w-full px-6 py-4 bg-white border border-amber-300 rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-amber-200/50 transition-all placeholder-muted/30"
+                                placeholder="e.g. 5, 7, 15, 21, 45, 60..."
+                              />
+                              <p className="text-[9px] font-bold text-muted px-1 mt-1.5">Enter the total number of days for this custom plan.</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Total Amount + Advance Amount */}
                         <div className="space-y-2">
-                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Total Amount (₹)</label>
-                          <input type="number" {...register("total_amount")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" placeholder="Total Amount" />
+                          <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Total Amount (₹) *</label>
+                          <input
+                            type="number"
+                            {...register("total_amount", { required: 'Total amount is required' })}
+                            readOnly={!isOtherPlan}
+                            className={`w-full px-6 py-4 border rounded-2xl font-bold text-forest outline-none focus:ring-2 transition-all placeholder-muted/30 ${
+                              isOtherPlan
+                                ? 'bg-white border-amber-300 focus:ring-amber-200/50'
+                                : 'bg-offwhite border-beige focus:ring-sage/20 cursor-not-allowed'
+                            }`}
+                            placeholder={isOtherPlan ? 'Enter custom amount...' : 'Auto-filled'}
+                          />
+                          {isOtherPlan && <p className="text-[9px] font-bold text-muted px-1 mt-1.5">Manually set the total amount for this custom plan.</p>}
                         </div>
                         <div className="space-y-2">
                           <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Advance Amount (₹)</label>
-                          <input type="number" {...register("advance_amount")} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all" placeholder="Advance Received" />
+                          <input
+                            type="number"
+                            {...register("advance_amount")}
+                            className={`w-full px-6 py-4 border rounded-2xl font-bold text-forest outline-none focus:ring-2 transition-all placeholder-muted/30 ${
+                              isOtherPlan
+                                ? 'bg-white border-amber-300 focus:ring-amber-200/50'
+                                : 'bg-offwhite border-beige focus:ring-sage/20'
+                            }`}
+                            placeholder="Advance Received"
+                          />
                         </div>
+
+                        {/* Remaining Amount + Payment Status */}
                         <div className="space-y-2">
                           <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Remaining Amount (₹)</label>
-                          <div className="w-full px-6 py-4 bg-offwhite/50 border border-beige rounded-2xl font-extrabold text-forest outline-none cursor-not-allowed">
-                            {rAmt.toLocaleString('en-IN')}
+                          <div className="w-full px-6 py-4 bg-offwhite/50 border border-beige rounded-2xl font-extrabold text-red-500 flex items-center cursor-not-allowed">
+                            ₹{rAmt.toLocaleString('en-IN')}
                           </div>
                         </div>
                         <div className="space-y-2 flex flex-col justify-center pt-5">

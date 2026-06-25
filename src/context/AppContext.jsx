@@ -801,14 +801,14 @@ export const AppProvider = ({ children }) => {
 
     // Insert membership directly after client creation
     const planMap = {
-      'Monthly Flow': 15000,
-      'Quarterly Balance': 40000,
-      'Annual Harmony': 150000
+      '3 Days': 729,
+      '10 Days': 2500,
+      '30 Days': 7000
     };
     const durationMap = {
-      'Monthly Flow': 30,
-      'Quarterly Balance': 90,
-      'Annual Harmony': 365
+      '3 Days': 3,
+      '10 Days': 10,
+      '30 Days': 30
     };
     
     // Auto-calculate payment details
@@ -823,7 +823,10 @@ export const AppProvider = ({ children }) => {
       paymentStatusDetail = 'Partially Paid';
     }
     
-    const duration = durationMap[data.plan] || 30;
+    // For 'Other' plan, use custom_duration; otherwise look up duration from map
+    const duration = data.plan === 'Other'
+      ? (parseInt(data.custom_duration) || 30)
+      : (durationMap[data.plan] || 30);
     const startDate = data.membership_start_date ? new Date(data.membership_start_date) : new Date();
     const expiryDate = new Date(startDate);
     expiryDate.setDate(startDate.getDate() + duration);
