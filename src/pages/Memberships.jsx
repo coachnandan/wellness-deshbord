@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabaseClient';
 import ClientEditModal from '../components/ClientEditModal';
+import ChangePlanModal from '../components/ChangePlanModal';
 
 export default function Memberships() {
   const { memberships, customers, addMembership, addNewMember, renewMembership, updateMembership, deleteMembership, fetchMembershipActivityLogs, user, sendWhatsAppAlert } = useAppContext();
@@ -1073,7 +1074,12 @@ export default function Memberships() {
                         <div className="bg-white border border-beige rounded-xl p-5 shadow-sm">
                           <div className="flex items-center justify-between mb-5">
                             <div>
-                              <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Active Plan</p>
+                              <div className="flex items-center space-x-2 mb-1">
+                                <p className="text-[10px] font-black text-muted uppercase tracking-widest">Active Plan</p>
+                                <button onClick={() => setIsChangePlanModalOpen(true)} className="text-sage hover:text-forest transition-colors" title="Change Plan">
+                                  <Edit3 size={12} />
+                                </button>
+                              </div>
                               <p className="text-xl font-black text-forest">
                                 {activeMembership.membership_plan || activeMembership.plan || '—'}
                               </p>
@@ -1382,45 +1388,11 @@ export default function Memberships() {
       )}
 
       {/* Change Plan Modal */}
-      {isChangePlanModalOpen && (
-        <div className="fixed inset-0 bg-forest/40 backdrop-blur-md z-[60] flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 border border-white/20">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-extrabold text-forest">Change Plan</h3>
-              <button onClick={() => setIsChangePlanModalOpen(false)} className="text-muted hover:text-forest">
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleChangePlan({
-                plan: e.target.plan.value,
-                total_amount: e.target.total_amount ? e.target.total_amount.value : undefined
-              });
-            }} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">New Plan</label>
-                <select name="plan" defaultValue={activeMembership?.plan} onChange={(e) => {
-                  const el = document.getElementById('changePlanTotal');
-                  if(el) {
-                    const planMap = { 'Monthly Flow': 15000, 'Quarterly Balance': 40000, 'Annual Harmony': 150000 };
-                    if(planMap[e.target.value]) el.value = planMap[e.target.value];
-                  }
-                }} className="w-full px-4 py-3 bg-offwhite border border-beige rounded-xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20">
-                  <option value="Monthly Flow">Monthly Flow (₹15,000)</option>
-                  <option value="Quarterly Balance">Quarterly Balance (₹40,000)</option>
-                  <option value="Annual Harmony">Annual Harmony (₹1,50,000)</option>
-                  <option value="Custom">Custom</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-forest uppercase tracking-widest mb-2">Total Amount (₹)</label>
-                <input id="changePlanTotal" type="number" name="total_amount" defaultValue={activeMembership?.total_amount || activeMembership?.amount || 0} className="w-full px-4 py-3 bg-offwhite border border-beige rounded-xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20" />
-              </div>
-              <button type="submit" className="w-full py-4 bg-sage text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald transition-all">Update Plan</button>
-            </form>
-          </div>
-        </div>
+      {isChangePlanModalOpen && activeMembership && (
+        <ChangePlanModal
+          membership={activeMembership}
+          onClose={() => setIsChangePlanModalOpen(false)}
+        />
       )}
 
       {/* Client Edit Modal */}
