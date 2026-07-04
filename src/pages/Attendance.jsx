@@ -150,7 +150,7 @@ const ShakeTypeDropdown = ({ value, onChange, disabled }) => {
 // --- Main Component ---
 
 export default function Attendance() {
-  const { attendance = [], customers = [], memberships = [], attendanceLocks = [], updateAttendance, finalizeAttendance } = useAppContext();
+  const { attendance = [], customers = [], memberships = [], attendanceLocks = [], updateAttendance, logShakePayment, finalizeAttendance, user } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [editingCustomer, setEditingCustomer] = useState(null);
@@ -159,10 +159,25 @@ export default function Attendance() {
   const [selectedDate, setSelectedDate] = useState(() => getISTDateString());
   const [paymentModal, setPaymentModal] = useState(null);
   
-  // Shake Members Modal State
-  const [showShakeMembers, setShowShakeMembers] = useState(null); // 'S', 'SB', or 'SF'
+  const [showShakeMembers, setShowShakeMembers] = useState(null);
   const [isShakeDropdownOpen, setIsShakeDropdownOpen] = useState(false);
   const shakeDropdownRef = useRef(null);
+  const [shakeLogs, setShakeLogs] = useState([]); // payment logs from DB
+  const [localPayments, setLocalPayments] = useState({}); // instant local cache: key = `${customerId}_${date}_${remark}`
+
+  const fetchShakeLogs = async (date) => {
+    try {
+      const { data, error } = await supabase
+        .from('membership_usage_logs')
+        .select('client_id, shake_type, amount_paid, advance_amount, due_amount, payment_method, payment_status, shake_date, created_at')
+        .eq('shake_date', date)
+        .not('shake_type', 'is', null);
+      if (!error && data) setShakeLogs(data);
+      if (error) console.error("fetchShakeLogs DB error:", error);
+    } catch (err) {
+      console.error("fetchShakeLogs network error:", err);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -178,6 +193,10 @@ export default function Attendance() {
     const id = setTimeout(() => setLayoutReady(true), 500);
     return () => clearTimeout(id);
   }, []);
+
+  useEffect(() => {
+    fetchShakeLogs(selectedDate);
+  }, [selectedDate]);
   
   const todayStr = getISTDateString();
   const selectedAttendance = attendance.filter(a => a.date === selectedDate);
@@ -259,44 +278,95 @@ export default function Attendance() {
     
     // Auto-trigger payment modal logic for all shakes
     if (['S', 'SB', 'SF', 'SBF'].includes(remarkValue)) {
-      const days = getRemarkDaysCount(customerId, remarkValue);
-      const dailyRate = DAILY_RATES[remarkValue];
-      setPaymentModal({ customerId, customerName: customer?.name || 'Unknown', remark: remarkValue, days, dailyRate, totalAmount: days * dailyRate });
+      setPaymentModal({
+        customerId,
+        customerName: customer?.name || 'Unknown',
+        remark: remarkValue,
+        plan: '1 Day',
+        customDuration: '',
+        totalAmount: 173,
+        paymentStatus: 'Paid',
+        advanceAmount: 173,
+        dueAmount: 0,
+        paymentMethod: 'Cash'
+      });
       return;
     }
   };
 
-  const handlePaymentConfirm = async () => {
+  const handlePaymentConfirm = async (e) => {
+    if (e) e.preventDefault();
     if (!paymentModal) return;
-    const { customerId, remark, days, dailyRate, totalAmount } = paymentModal;
+    const { customerId, remark, plan, customDuration, totalAmount, paymentStatus, advanceAmount, dueAmount, paymentMethod } = paymentModal;
+    const finalDays = plan === 'Custom' && customDuration ? parseInt(customDuration) :
+                     (plan === '1 Day' ? 1 : plan === '3 Days' ? 3 : plan === '10 Days' ? 10 : 30);
     try {
       const record = selectedAttendance.find(a => a.customerId === customerId);
-      // Notice we preserve the existing status (or default to 'Present') instead of setting to 'Shake'
       const statusToSave = record?.status && record.status !== 'Pending' ? record.status : 'Present';
       
-      await updateAttendance({ 
-        customerId, 
-        date: selectedDate, 
-        status: statusToSave, 
-        checkIn: record?.checkIn || getISTTimeString(), 
-        remark 
-      });
-      
-      const customerMemberships = memberships.filter(m => m.customerId === customerId);
+      // Step 1: Mark attendance WITH payment info — saves everything in one DB call
+      try {
+        await updateAttendance({ 
+          customerId, 
+          date: selectedDate, 
+          status: statusToSave, 
+          checkIn: record?.checkIn || getISTTimeString(), 
+          remark,
+          amount_paid: totalAmount,
+          payment_status: paymentStatus,
+          advance_amount: advanceAmount,
+          due_amount: dueAmount,
+          payment_method: paymentMethod,
+        });
+      } catch (attErr) {
+        // Fallback: save without payment fields if columns don't exist yet
+        console.warn('[Attendance] Payment columns missing, saving basic attendance:', attErr?.message);
+        await updateAttendance({ 
+          customerId, 
+          date: selectedDate, 
+          status: statusToSave, 
+          checkIn: record?.checkIn || getISTTimeString(), 
+          remark,
+        });
+      }
+
+      // Step 2: Store in local state IMMEDIATELY so popup shows right away
+      const payKey = `${customerId}_${selectedDate}_${remark}`;
+      setLocalPayments(prev => ({
+        ...prev,
+        [payKey]: {
+          client_id: customerId,
+          shake_type: remark,
+          amount_paid: totalAmount,
+          payment_status: paymentStatus,
+          advance_amount: advanceAmount,
+          due_amount: dueAmount,
+          payment_method: paymentMethod,
+          shake_date: selectedDate,
+          created_at: new Date().toISOString(),
+        }
+      }));
+
+      // Step 3: Handle Membership specific logic (extra charges for active, audit log for non-members)
+      const customerMemberships = memberships.filter(m => m.customerId === customerId || m.client_id === customerId);
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      const activeMem = customerMemberships.find(m => new Date(m.expiryDate) >= today);
+      const activeMem = customerMemberships.find(m => new Date(m.expiryDate || m.expiry_date) >= today && (m.status === 'Active' || !m.status));
       
       if (activeMem) {
-        const membership = memberships
-          .filter(m => m.client_id === customerId || m.customerId === customerId)
-          .sort((a, b) => new Date(b.start_date || b.createdAt) - new Date(a.start_date || a.createdAt))[0];
+        const membership = customerMemberships.sort((a, b) => new Date(b.start_date || b.createdAt) - new Date(a.start_date || a.createdAt))[0];
         if (membership) {
-          await supabase.from('memberships').update({ extra_type: remark, extra_charge: totalAmount, extra_days: days }).eq('id', membership.id).select();
+          await supabase.from('memberships').update({ extra_type: remark, extra_charge: totalAmount, extra_days: finalDays }).eq('id', membership.id);
+        }
+      } else {
+        if (logShakePayment) {
+          await logShakePayment(customerId, remark, finalDays, totalAmount, paymentStatus, advanceAmount, dueAmount, paymentMethod, selectedDate);
         }
       }
-      
+      fetchShakeLogs(selectedDate); // refresh DB logs in background
+
       const customer = customers.find(c => c.id === customerId);
-      toast.success(`${REMARK_LABELS[remark]} recorded for ${customer?.name} — Day ${days}, Total: ₹${totalAmount}`);
+      const paidLabel = paymentStatus === 'Paid' ? `₹${totalAmount}` : paymentStatus === 'Advance' ? `₹${advanceAmount} paid, ₹${dueAmount} due` : `₹${totalAmount} due`;
+      toast.success(`${REMARK_LABELS[remark]} recorded for ${customer?.name} — ${paidLabel} via ${paymentMethod}`);
       setPaymentModal(null);
     } catch (error) {
       console.error('[PaymentConfirm] Failed:', error);
@@ -320,13 +390,27 @@ export default function Attendance() {
       .filter(a => a.remark === remarkType)
       .map(a => {
         const customer = customers.find(c => c.id === a.customerId);
+        // Read payment info from attendance record first (saved to DB),
+        // then fall back to localPayments (instant display before DB confirms)
+        const payKey = `${a.customerId}_${selectedDate}_${remarkType}`;
+        const localPay = localPayments[payKey];
+        const paymentMethod = a.payment_method || localPay?.payment_method || null;
+        const amountPaid = a.amount_paid ?? localPay?.amount_paid ?? null;
+        const advanceAmount = a.advance_amount ?? localPay?.advance_amount ?? null;
+        const dueAmount = a.due_amount ?? localPay?.due_amount ?? null;
+        const paymentStatus = a.payment_status || localPay?.payment_status || null;
         return {
           id: a.customerId,
           name: customer?.name || 'Unknown',
           contact: customer?.contact || '-',
-          markedBy: a.markedBy || '-',
-          time: a.checkIn || (a.updated_at ? new Date(a.updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-'),
-          remark: a.remark
+          markedBy: a.markedBy || a.marked_by_name || '-',
+          time: a.checkIn || a.check_in || (a.updated_at ? new Date(a.updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-'),
+          remark: a.remark,
+          paymentMethod,
+          amountPaid,
+          advanceAmount,
+          dueAmount,
+          paymentStatus,
         };
       });
   };
@@ -655,24 +739,57 @@ export default function Attendance() {
               {getMembersByRemark(showShakeMembers).length > 0 ? (
                 <div className="space-y-3">
                   {getMembersByRemark(showShakeMembers).map((member, idx) => (
-                    <div key={idx} className="flex items-center p-4 bg-offwhite/50 rounded-2xl border border-beige hover:bg-white hover:border-sage/30 transition-all shadow-sm hover:shadow-md group">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-sm shrink-0 mr-4 shadow-sm transition-transform group-hover:scale-105 ${
-                        showShakeMembers === 'S' ? 'bg-[#D97706] text-white' :
-                        showShakeMembers === 'SB' ? 'bg-[#7C3AED] text-white' : 'bg-[#0891B2] text-white'
-                      }`}>
-                        {member.name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-extrabold text-forest text-sm truncate">{member.name}</p>
-                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">ID: {member.id.substring(0,8)}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5 ml-4 shrink-0">
-                        <span className="flex items-center gap-1 text-[10px] font-black text-forest uppercase tracking-widest">
-                          <Clock size={10} className="text-sage" /> {member.time}
-                        </span>
-                        <span className="text-[9px] font-bold text-muted/80 uppercase tracking-widest">
-                          By: <span className="text-forest">{member.markedBy}</span>
-                        </span>
+                    <div key={idx} className="p-4 bg-offwhite/50 rounded-2xl border border-beige hover:bg-white hover:border-sage/30 transition-all shadow-sm hover:shadow-md group">
+                      <div className="flex items-center">
+                        <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-sm shrink-0 mr-4 shadow-sm transition-transform group-hover:scale-105 ${
+                          showShakeMembers === 'S' ? 'bg-[#D97706] text-white' :
+                          showShakeMembers === 'SB' ? 'bg-[#7C3AED] text-white' :
+                          showShakeMembers === 'SF' ? 'bg-[#0891B2] text-white' : 'bg-gradient-to-br from-[#D97706] to-[#0891B2] text-white'
+                        }`}>
+                          {member.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-extrabold text-forest text-sm truncate">{member.name}</p>
+                          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                            <p className="text-[10px] font-bold text-muted uppercase tracking-widest">{REMARK_LABELS[member.remark]}</p>
+                            
+                            {member.paymentStatus && (
+                              <div className="flex items-center gap-3">
+                                <span className="w-1 h-1 rounded-full bg-beige/80"></span>
+                                <p className="text-[10px] font-bold text-forest uppercase tracking-widest">
+                                  Mode: <span className="font-black text-muted">{member.paymentMethod || 'Cash'}</span>
+                                </p>
+                                <span className="w-1 h-1 rounded-full bg-beige/80"></span>
+                                {member.paymentStatus === 'Due' ? (
+                                  <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">
+                                    Due: <span className="font-black">₹{((member.dueAmount ?? member.amountPaid) ?? 0).toLocaleString('en-IN')}</span>
+                                  </p>
+                                ) : member.paymentStatus === 'Advance' && (member.dueAmount ?? 0) > 0 ? (
+                                  <div className="flex items-center gap-3">
+                                    <p className="text-[10px] font-bold text-forest uppercase tracking-widest">
+                                      Paid: <span className="font-black text-[#1F7A45]">₹{(member.advanceAmount ?? 0).toLocaleString('en-IN')}</span>
+                                    </p>
+                                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">
+                                      Due: <span className="font-black">₹{member.dueAmount.toLocaleString('en-IN')}</span>
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="text-[10px] font-bold text-forest uppercase tracking-widest">
+                                    Paid: <span className="font-black text-[#1F7A45]">₹{(member.amountPaid ?? 0).toLocaleString('en-IN')}</span>
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 ml-4 shrink-0">
+                          <span className="flex items-center gap-1 text-[10px] font-black text-forest uppercase tracking-widest">
+                            <Clock size={10} className="text-sage" /> {member.time}
+                          </span>
+                          <span className="text-[9px] font-bold text-muted/80 uppercase tracking-widest">
+                            By: <span className="text-forest">{member.markedBy}</span>
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -697,15 +814,17 @@ export default function Attendance() {
         </div>
       )}
 
-      {/* Daily Rate Payment Modal */}
+      {/* Billing & Payment Modal */}
       {paymentModal && (
-        <div className="fixed inset-0 bg-charcoal/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-300">
+        <div className="fixed inset-0 bg-charcoal/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-300 my-4">
+            {/* Header */}
             <div className="px-8 py-6 border-b border-beige flex items-center justify-between bg-offwhite/30">
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
                   paymentModal.remark === 'S' ? 'bg-[#D97706]/10 text-[#D97706]' :
-                  paymentModal.remark === 'SB' ? 'bg-[#7C3AED]/10 text-[#7C3AED]' : 'bg-[#0891B2]/10 text-[#0891B2]'
+                  paymentModal.remark === 'SB' ? 'bg-[#7C3AED]/10 text-[#7C3AED]' :
+                  paymentModal.remark === 'SF' ? 'bg-[#0891B2]/10 text-[#0891B2]' : 'bg-[#D97706]/10 text-[#D97706]'
                 }`}><DollarSign size={20} /></div>
                 <div>
                   <h3 className="text-xl font-extrabold text-forest">{REMARK_LABELS[paymentModal.remark]}</h3>
@@ -714,45 +833,150 @@ export default function Attendance() {
               </div>
               <button onClick={() => setPaymentModal(null)} className="p-2 rounded-xl bg-offwhite text-muted hover:bg-beige transition-colors"><X size={20} /></button>
             </div>
-            
-            <div className="p-8 space-y-6">
-              <div className="flex items-center justify-between p-5 bg-offwhite rounded-2xl border border-beige">
+
+            <form onSubmit={handlePaymentConfirm} className="p-8 space-y-5">
+
+              {/* Payment Plan */}
+              <div className={`grid gap-4 ${paymentModal.plan === 'Custom' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 <div>
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest">Days Logged</p>
-                  <p className="text-3xl font-extrabold text-forest mt-1">{paymentModal.days}</p>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Payment Plan *</label>
+                  <select
+                    required
+                    value={paymentModal.plan}
+                    onChange={(e) => {
+                      const plan = e.target.value;
+                      const amounts = { '1 Day': 173, '3 Days': 729, '10 Days': 2500, '30 Days': 7000 };
+                      const newTotal = amounts[plan] ?? paymentModal.totalAmount;
+                      setPaymentModal(p => {
+                        const adv = p.paymentStatus === 'Paid' ? newTotal : (p.paymentStatus === 'Advance' ? Math.min(p.advanceAmount, newTotal) : 0);
+                        const due = p.paymentStatus === 'Due' ? newTotal : (p.paymentStatus === 'Advance' ? Math.max(0, newTotal - adv) : 0);
+                        return { ...p, plan, totalAmount: newTotal, advanceAmount: adv, dueAmount: due };
+                      });
+                    }}
+                    className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
+                  >
+                    <option value="1 Day">1 Day (₹173)</option>
+                    <option value="3 Days">3 Days (₹729)</option>
+                    <option value="10 Days">10 Days (₹2,500)</option>
+                    <option value="30 Days">30 Days (₹7,000)</option>
+                    <option value="Custom">Custom</option>
+                  </select>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest">Rate</p>
-                  <p className="text-2xl font-extrabold text-sage mt-1">₹{paymentModal.dailyRate}</p>
-                  <p className="text-[9px] font-bold text-muted mt-1">per day</p>
+                {paymentModal.plan === 'Custom' && (
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Days *</label>
+                    <input
+                      type="number" required min="1"
+                      value={paymentModal.customDuration}
+                      onChange={(e) => setPaymentModal(p => ({...p, customDuration: e.target.value}))}
+                      className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all"
+                      placeholder="e.g. 5"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Status + Method */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Payment Status *</label>
+                  <select
+                    required
+                    value={paymentModal.paymentStatus}
+                    onChange={(e) => {
+                      const status = e.target.value;
+                      setPaymentModal(p => {
+                        const rate = p.totalAmount;
+                        if (status === 'Paid') return { ...p, paymentStatus: status, advanceAmount: rate, dueAmount: 0 };
+                        if (status === 'Due') return { ...p, paymentStatus: status, advanceAmount: 0, dueAmount: rate };
+                        return { ...p, paymentStatus: status, advanceAmount: 0, dueAmount: rate };
+                      });
+                    }}
+                    className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
+                  >
+                    <option value="Paid">Paid</option>
+                    <option value="Advance">Advance</option>
+                    <option value="Due">Due</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Payment Mode *</label>
+                  <select
+                    required
+                    value={paymentModal.paymentMethod}
+                    onChange={(e) => setPaymentModal(p => ({...p, paymentMethod: e.target.value}))}
+                    className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Online">Online</option>
+                  </select>
                 </div>
               </div>
 
-              <div className={`p-6 rounded-3xl border-2 transition-colors ${
-                paymentModal.remark === 'S' ? 'bg-[#FEF9C3]/20 border-[#D97706]/20' :
-                paymentModal.remark === 'SB' ? 'bg-[#7C3AED]/5 border-[#7C3AED]/20' : 'bg-[#0891B2]/5 border-[#0891B2]/20'
-              }`}>
-                <div className="flex items-center justify-between">
+              {/* Advance split — only when Advance selected */}
+              {paymentModal.paymentStatus === 'Advance' && (
+                <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
                   <div>
-                    <p className="text-[10px] font-black text-muted uppercase tracking-widest">Total Amount</p>
-                    <p className="text-[10px] font-bold text-muted mt-1">{paymentModal.days} days × ₹{paymentModal.dailyRate}</p>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Advance (₹) *</label>
+                    <input
+                      type="number" required min="0" max={paymentModal.totalAmount}
+                      value={paymentModal.advanceAmount}
+                      onChange={(e) => {
+                        const adv = Number(e.target.value);
+                        setPaymentModal(p => ({ ...p, advanceAmount: adv, dueAmount: Math.max(0, p.totalAmount - adv) }));
+                      }}
+                      className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all"
+                    />
                   </div>
-                  <p className={`text-4xl font-extrabold tracking-tight ${
-                    paymentModal.remark === 'S' ? 'text-[#D97706]' : paymentModal.remark === 'SB' ? 'text-[#7C3AED]' : 'text-[#0891B2]'
-                  }`}>₹{paymentModal.totalAmount.toLocaleString('en-IN')}</p>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Due (₹)</label>
+                    <div className="w-full h-14 px-6 bg-beige/30 border border-beige/50 rounded-2xl font-bold text-muted flex items-center select-none">
+                      ₹{paymentModal.dueAmount}
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {/* Editable Total Amount */}
+              <div className={`p-5 rounded-3xl border-2 transition-all ${
+                paymentModal.remark === 'S' ? 'bg-[#FFFBEB] border-[#D97706]/30' :
+                paymentModal.remark === 'SB' ? 'bg-[#F5F3FF] border-[#7C3AED]/30' :
+                paymentModal.remark === 'SF' ? 'bg-[#ECFEFF] border-[#0891B2]/30' : 'bg-[#FFFBEB] border-[#D97706]/30'
+              }`}>
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-[10px] font-black text-muted uppercase tracking-widest whitespace-nowrap">Total Amount (₹)</p>
+                  <input
+                    type="number" min="0" required
+                    value={paymentModal.totalAmount}
+                    onChange={(e) => {
+                      const newTotal = Number(e.target.value);
+                      setPaymentModal(p => {
+                        const adv = p.paymentStatus === 'Paid' ? newTotal : (p.paymentStatus === 'Advance' ? Math.min(p.advanceAmount, newTotal) : 0);
+                        const due = p.paymentStatus === 'Due' ? newTotal : (p.paymentStatus === 'Advance' ? Math.max(0, newTotal - adv) : 0);
+                        return { ...p, totalAmount: newTotal, advanceAmount: adv, dueAmount: due };
+                      });
+                    }}
+                    className={`w-36 text-right bg-transparent outline-none border-b-2 border-dashed text-4xl font-extrabold tracking-tight pb-1 ${
+                      paymentModal.remark === 'S' ? 'text-[#D97706] border-[#D97706]/40' :
+                      paymentModal.remark === 'SB' ? 'text-[#7C3AED] border-[#7C3AED]/40' :
+                      paymentModal.remark === 'SF' ? 'text-[#0891B2] border-[#0891B2]/40' : 'text-[#D97706] border-[#D97706]/40'
+                    }`}
+                  />
+                </div>
+                <p className="text-[9px] font-bold text-muted mt-2">Click the amount to edit it</p>
               </div>
-            </div>
-            
-            <div className="px-8 py-6 border-t border-beige bg-offwhite/50 flex gap-4">
-              <button onClick={() => setPaymentModal(null)} className="flex-1 px-6 py-4 bg-white text-forest border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite active:scale-95 transition-all shadow-sm">Cancel</button>
-              <button onClick={handlePaymentConfirm}
-                className={`flex-[2] px-6 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-luxury active:scale-95 ${
-                  paymentModal.remark === 'S' ? 'bg-gradient-to-br from-[#F59E0B] to-[#D97706] shadow-[#D97706]/30' :
-                  paymentModal.remark === 'SB' ? 'bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] shadow-[#7C3AED]/30' : 
-                  'bg-gradient-to-br from-[#06B6D4] to-[#0891B2] shadow-[#0891B2]/30'
-                }`}>Confirm & Save</button>
-            </div>
+
+              <div className="flex gap-4 pt-1">
+                <button type="button" onClick={() => setPaymentModal(null)} className="flex-1 px-6 py-4 bg-white text-forest border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite active:scale-95 transition-all shadow-sm">Cancel</button>
+                <button type="submit"
+                  className={`flex-[2] px-6 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-luxury active:scale-95 ${
+                    paymentModal.remark === 'S' ? 'bg-gradient-to-br from-[#F59E0B] to-[#D97706] shadow-[#D97706]/30' :
+                    paymentModal.remark === 'SB' ? 'bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] shadow-[#7C3AED]/30' :
+                    paymentModal.remark === 'SF' ? 'bg-gradient-to-br from-[#06B6D4] to-[#0891B2] shadow-[#0891B2]/30' :
+                    'bg-gradient-to-br from-[#F59E0B] to-[#0891B2] shadow-[#D97706]/30'
+                  }`}>Confirm & Save</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

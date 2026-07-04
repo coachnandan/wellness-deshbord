@@ -529,8 +529,8 @@ export default function Customers() {
                   statusColor = 'bg-amber-50 text-amber-600 border-amber-200';
                 }
 
-                const planDurationMap = { '3 Days': 3, '10 Days': 10, '30 Days': 30 };
-                const planDefaultAmountMap = { '3 Days': 729, '10 Days': 2500, '30 Days': 7000 };
+                const planDurationMap = { '1 Day': 1, '3 Days': 3, '10 Days': 10, '30 Days': 30 };
+                const planDefaultAmountMap = { '1 Day': 173, '3 Days': 729, '10 Days': 2500, '30 Days': 7000 };
                 const isOtherPlan = membershipFormState.plan === 'Other';
 
                 return (
@@ -563,6 +563,7 @@ export default function Customers() {
                           }}
                           className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
                         >
+                          <option value="1 Day">1 Day</option>
                           <option value="3 Days">3 Days</option>
                           <option value="10 Days">10 Days</option>
                           <option value="30 Days">30 Days</option>

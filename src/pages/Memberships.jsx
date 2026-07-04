@@ -22,6 +22,12 @@ export default function Memberships() {
   const [selectedMembership, setSelectedMembership] = useState(null);
   const [activeMembership, setActiveMembership] = useState(null);
   const [renewalLogs, setRenewalLogs] = useState([]);
+  
+  // Renew Modal State
+  const [renewPlan, setRenewPlan] = useState('30 Days');
+  const [renewDuration, setRenewDuration] = useState(30);
+  const [renewAmount, setRenewAmount] = useState(7000);
+
   const [activityLogs, setActivityLogs] = useState([]);
   const [memberAttendance, setMemberAttendance] = useState([]);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -48,9 +54,9 @@ export default function Memberships() {
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
-      plan: '3 Days',
-      total_amount: 729,
-      advance_amount: 729
+      plan: '1 Day',
+      total_amount: 173,
+      advance_amount: 173
     }
   });
 
@@ -60,8 +66,8 @@ export default function Memberships() {
   const watchCustomDuration = watch('custom_duration');
 
   // Shared plan config — keep in sync with Customers.jsx membership form
-  const PLAN_DURATION_MAP = { '3 Days': 3, '10 Days': 10, '30 Days': 30 };
-  const PLAN_AMOUNT_MAP   = { '3 Days': 729, '10 Days': 2500, '30 Days': 7000 };
+  const PLAN_DURATION_MAP = { '1 Day': 1, '3 Days': 3, '10 Days': 10, '30 Days': 30 };
+  const PLAN_AMOUNT_MAP   = { '1 Day': 173, '3 Days': 729, '10 Days': 2500, '30 Days': 7000 };
 
   // Auto-update total amount when plan changes
   useMemo(() => {
@@ -157,13 +163,16 @@ export default function Memberships() {
 
   const openRenewModal = (membership) => {
     setSelectedMembership(membership);
+    setRenewPlan('30 Days');
+    setRenewDuration(30);
+    setRenewAmount(7000);
     setIsRenewModalOpen(true);
   };
 
-  const handleRenew = async (durationDays) => {
+  const handleRenew = async () => {
     if (!selectedMembership) return;
     try {
-      await renewMembership(selectedMembership.id, durationDays);
+      await renewMembership(selectedMembership.id, { plan: renewPlan, durationDays: renewDuration, amount: renewAmount });
       toast.success('Wellness journey successfully extended');
       setIsRenewModalOpen(false);
     } catch (error) {
@@ -598,16 +607,56 @@ export default function Memberships() {
                 <div className="space-y-3">
                   <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Renewal Extension</label>
                   <select
-                    id="renewalDuration"
                     className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
-                    defaultValue="30"
+                    value={renewPlan}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRenewPlan(val);
+                      if (val === '1 Day') { setRenewDuration(1); setRenewAmount(173); }
+                      else if (val === '3 Days') { setRenewDuration(3); setRenewAmount(729); }
+                      else if (val === '10 Days') { setRenewDuration(10); setRenewAmount(2500); }
+                      else if (val === '30 Days') { setRenewDuration(30); setRenewAmount(7000); }
+                      else if (val === 'Other') { setRenewDuration(''); setRenewAmount(''); }
+                    }}
                   >
-                    <option value="30">Monthly Flow (+30 Days)</option>
-                    <option value="90">Quarterly Balance (+90 Days)</option>
-                    <option value="180">Half-Yearly (+180 Days)</option>
-                    <option value="365">Annual Harmony (+365 Days)</option>
+                    <option value="1 Day">1 Day (₹173)</option>
+                    <option value="3 Days">3 Days (₹729)</option>
+                    <option value="10 Days">10 Days (₹2500)</option>
+                    <option value="30 Days">30 Days (₹7000)</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
+                {renewPlan === 'Other' ? (
+                  <>
+                    <div className="space-y-3">
+                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Custom Duration (Days)</label>
+                      <input
+                        type="number"
+                        className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all"
+                        value={renewDuration}
+                        onChange={(e) => setRenewDuration(e.target.value)}
+                        min="1"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Total Amount (₹)</label>
+                      <input
+                        type="number"
+                        className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all"
+                        value={renewAmount}
+                        onChange={(e) => setRenewAmount(e.target.value)}
+                        min="0"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Total Amount (₹)</label>
+                    <div className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest/40 flex items-center">
+                      ₹{renewAmount}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-3">
                   <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1">Current Expiry</label>
                   <div className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest/40 flex items-center">
@@ -629,7 +678,7 @@ export default function Memberships() {
                     <Activity size={14} />
                   </button>
                   <button
-                    onClick={() => handleRenew(document.getElementById('renewalDuration').value)}
+                    onClick={handleRenew}
                     className="text-[10px] font-black uppercase tracking-[0.2em] px-5 py-2.5 bg-forest text-white hover:bg-forest-hover rounded-xl transition-all shadow-lg shadow-forest/10 active:scale-95"
                   >
                     Complete Extension
@@ -797,6 +846,7 @@ export default function Memberships() {
                             {...register("plan")}
                             className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-2 focus:ring-sage/20 transition-all appearance-none"
                           >
+                            <option value="1 Day">1 Day (₹173)</option>
                             <option value="3 Days">3 Days (₹729)</option>
                             <option value="10 Days">10 Days (₹2,500)</option>
                             <option value="30 Days">30 Days (₹7,000)</option>

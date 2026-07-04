@@ -261,7 +261,7 @@ export const AppProvider = ({ children }) => {
         .from('attendance_locks')
         .select('*')
         .gte('date', getISTDateString(thirtyOneDaysAgo));
-      
+
       if (lockError) {
         if (lockError.code === 'PGRST205' || lockError.message?.includes('404') || lockError.message?.includes('does not exist')) {
           console.warn('[Data] attendance_locks table not found. Skipping locks sync.');
@@ -278,7 +278,7 @@ export const AppProvider = ({ children }) => {
         .select('*')
         .gte('visit_date', getISTDateString(thirtyOneDaysAgo))
         .order('created_at', { ascending: false });
-        
+
       if (visitorError) {
         if (visitorError.code === 'PGRST205' || visitorError.message?.includes('404') || visitorError.message?.includes('does not exist')) {
           console.warn('[Data] visitor_logs table not found. Skipping visitors sync.');
@@ -295,7 +295,7 @@ export const AppProvider = ({ children }) => {
         .select('*')
         .gte('visit_date', getISTDateString(thirtyOneDaysAgo))
         .order('created_at', { ascending: false });
-        
+
       if (closingError) {
         if (closingError.code === 'PGRST205' || closingError.message?.includes('404') || closingError.message?.includes('does not exist')) {
           console.warn('[Data] closing table not found. Skipping closings sync.');
@@ -413,40 +413,11 @@ export const AppProvider = ({ children }) => {
     // No auto-attendance insert - attendance is only created when manually marked
 
     // Insert default membership plan
-    const startDate = new Date();
-    const expiryDate = new Date();
-    expiryDate.setDate(startDate.getDate() + 30);
-    const { data: memData } = await supabase.from('memberships').insert([
-      {
-        client_id: data[0].id,
-        membership_plan: 'Monthly Flow',
-        duration_days: 30,
-        amount: 15000,
-        start_date: startDate.toISOString().split('T')[0],
-        expiry_date: expiryDate.toISOString().split('T')[0],
-        status: 'Active',
-        payment_status: 'Paid',
-        renewal_status: 'New',
-        remaining_days: 30
-      }
-    ]).select();
 
     const parsedClient = { ...data[0] };
 
     // Update state optimistically
     setCustomers(prev => [parsedClient, ...prev]);
-
-    // Refresh memberships
-    if (memData && memData.length) {
-      const mappedMem = {
-        ...memData[0],
-        customerId: memData[0].client_id,
-        plan: memData[0].membership_plan,
-        startDate: memData[0].start_date,
-        expiryDate: memData[0].expiry_date
-      };
-      setMemberships(prev => [mappedMem, ...prev.filter(m => m.id !== `PENDING-${data[0].id}`)]);
-    }
 
     // Trigger welcome WhatsApp
     await sendWhatsAppAlert(data[0].id, 'Welcome', { plan: 'Monthly Flow' });
@@ -571,7 +542,13 @@ export const AppProvider = ({ children }) => {
         user_id: user?.id || null,
         marked_by_name: markerName,
         client_name: clientName,
-        updated_at: now.toISOString()
+        updated_at: now.toISOString(),
+        // Payment fields (only saved when provided)
+        ...(record.amount_paid != null && { amount_paid: record.amount_paid }),
+        ...(record.payment_status != null && { payment_status: record.payment_status }),
+        ...(record.advance_amount != null && { advance_amount: record.advance_amount }),
+        ...(record.due_amount != null && { due_amount: record.due_amount }),
+        ...(record.payment_method != null && { payment_method: record.payment_method }),
       }, { onConflict: 'client_id, date' })
       .select();
 
@@ -590,10 +567,10 @@ export const AppProvider = ({ children }) => {
     });
 
     // 3. Shake Deduction Logic
-    const isShake = ['S', 'SB', 'SF'].includes(record.remark);
+    const isShake = ['S', 'SB', 'SF', 'SBF'].includes(record.remark);
     if (isShake) {
-      const activeMem = memberships.find(m => 
-        (m.client_id === record.customerId || m.customerId === record.customerId) && 
+      const activeMem = memberships.find(m =>
+        (m.client_id === record.customerId || m.customerId === record.customerId) &&
         m.status === 'Active'
       );
 
@@ -617,17 +594,97 @@ export const AppProvider = ({ children }) => {
           // Update Frontend
           setMemberships(prev => prev.map(m => m.id === activeMem.id ? { ...m, remaining_days: newRemaining, status: newStatus } : m));
 
-          // Log Usage
+          // Log Usage WITH payment details if provided
           await supabase.from('membership_usage_logs').insert({
             membership_id: activeMem.id,
             client_id: record.customerId,
             shake_date: record.date,
+            shake_type: record.remark,
             shake_time_ist: timeIST,
             remaining_days: newRemaining,
-            updated_by_name: markerName
+            updated_by_name: markerName,
+            ...(record.amount_paid != null && { amount_paid: record.amount_paid }),
+            ...(record.payment_status != null && { payment_status: record.payment_status }),
+            ...(record.advance_amount != null && { advance_amount: record.advance_amount }),
+            ...(record.due_amount != null && { due_amount: record.due_amount }),
+            ...(record.payment_method != null && { payment_method: record.payment_method })
           });
         }
       }
+    }
+  };
+
+  const logShakePayment = async (customerId, remark, days, totalAmount, paymentStatus = 'Paid', advanceAmount = 0, dueAmount = 0, paymentMethod = 'Cash', shakeDate = null) => {
+    const now = new Date();
+    const dateIST = shakeDate || getISTDateString(now);
+    const timeIST = getISTTimeString(now);
+    const markerName = user?.name || user?.email?.split('@')[0] || 'System Admin';
+    const clientName = customers.find(c => c.id === customerId)?.name || 'Unknown';
+
+    try {
+      // 1. Log the shake consumption and payment
+      const { data: usageLog, error: usageErr } = await supabase.from('membership_usage_logs').insert({
+        membership_id: null,
+        client_id: customerId,
+        client_name: clientName,
+        membership_plan: 'Non-Member Shake',
+        shake_type: remark,
+        used_day: days,
+        remaining_days: null,
+        shake_date: dateIST,
+        shake_time_ist: timeIST,
+        amount_paid: totalAmount,
+        payment_status: paymentStatus,
+        advance_amount: advanceAmount,
+        due_amount: dueAmount,
+        payment_method: paymentMethod,
+        updated_by_name: markerName,
+        updated_by_user_id: user?.id || null
+      }).select();
+
+      if (usageErr) throw usageErr;
+
+      // 2. Log the activity for audit
+      const { error: actErr } = await supabase.from('membership_activity_logs').insert({
+        membership_id: null,
+        client_id: customerId,
+        action_type: 'Payment',
+        action_description: `Collected ₹${advanceAmount} (Total: ₹${totalAmount}) via ${paymentMethod} for ${days} days of ${remark} Shake`,
+        performed_by_name: markerName,
+        performed_by_user_id: user?.id || null
+      });
+
+      if (actErr) throw actErr;
+
+      return { data: usageLog, error: null };
+    } catch (error) {
+      console.error('logShakePayment failed:', error);
+      throw error;
+    }
+  };
+
+  const logVisitorShakePayment = async (visitorId, payload) => {
+    const markerName = user?.name || user?.email?.split('@')[0] || 'System Admin';
+
+    try {
+      const { data, error } = await supabase.from('visitor_shake_logs').insert({
+        visitor_id: visitorId,
+        visitor_name: payload.visitor_name,
+        shake_type: payload.shake_type,
+        amount: payload.amount,
+        payment_status: payload.payment_status,
+        advance_amount: payload.advance_amount,
+        due_amount: payload.due_amount,
+        payment_method: payload.payment_method,
+        created_by_user_id: user?.id || null,
+        created_by_user_name: markerName
+      }).select();
+
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      console.error('logVisitorShakePayment failed:', error);
+      throw error;
     }
   };
 
@@ -650,7 +707,7 @@ export const AppProvider = ({ children }) => {
       console.error("finalizeAttendance failed:", error);
       throw error;
     }
-    
+
     // Add to local state (realtime should catch it too, but we optimistically add)
     if (data && data[0]) {
       setAttendanceLocks(prev => [...prev, data[0]]);
@@ -801,16 +858,18 @@ export const AppProvider = ({ children }) => {
 
     // Insert membership directly after client creation
     const planMap = {
+      '1 Day': 173,
       '3 Days': 729,
       '10 Days': 2500,
       '30 Days': 7000
     };
     const durationMap = {
+      '1 Day': 1,
       '3 Days': 3,
       '10 Days': 10,
       '30 Days': 30
     };
-    
+
     // Auto-calculate payment details
     const totalAmount = data.total_amount ? parseFloat(data.total_amount) : (planMap[data.plan] || 0);
     const advanceAmount = data.advance_amount ? parseFloat(data.advance_amount) : totalAmount;
@@ -822,7 +881,7 @@ export const AppProvider = ({ children }) => {
     } else if (remainingAmount > 0 && advanceAmount > 0) {
       paymentStatusDetail = 'Partially Paid';
     }
-    
+
     // For 'Other' plan, use custom_duration; otherwise look up duration from map
     const duration = data.plan === 'Other'
       ? (parseInt(data.custom_duration) || 30)
@@ -830,7 +889,7 @@ export const AppProvider = ({ children }) => {
     const startDate = data.membership_start_date ? new Date(data.membership_start_date) : new Date();
     const expiryDate = new Date(startDate);
     expiryDate.setDate(startDate.getDate() + duration);
-    
+
     const membershipPayload = {
       client_id: clientData[0].id,
       client_name: data.full_name || null,
@@ -957,32 +1016,29 @@ export const AppProvider = ({ children }) => {
     return newClient;
   };
 
-  const renewMembership = async (membershipId, durationDays) => {
+  const renewMembership = async (membershipId, renewalData) => {
     const membership = memberships.find(m => m.id === membershipId);
     if (!membership) throw new Error('Membership not found');
 
-    const prevExpiry = new Date(membership.expiryDate || membership.expiry_date || Date.now());
-    const newExpiry = new Date(membership.status === 'Pending' ? Date.now() : prevExpiry);
+    const durationDays = renewalData?.durationDays || renewalData;
+    const planName = renewalData?.plan || 'Custom Plan';
+    const amount = renewalData?.amount || 0;
+
+    const startDate = new Date().toISOString().split('T')[0];
+    const newExpiry = new Date();
     newExpiry.setDate(newExpiry.getDate() + parseInt(durationDays));
+    const expiryDateStr = newExpiry.toISOString().split('T')[0];
 
     if (membershipId.startsWith('PENDING-')) {
-      const planMap = {
-        30: { plan: 'Monthly Flow', amount: 15000 },
-        90: { plan: 'Quarterly Balance', amount: 40000 },
-        180: { plan: 'Half-Yearly', amount: 80000 },
-        365: { plan: 'Annual Harmony', amount: 150000 }
-      };
-      const pDetails = planMap[durationDays] || { plan: 'Custom Plan', amount: 0 };
-
       const { data: insertedData, error: insertError } = await supabase
         .from('memberships')
         .insert([{
           client_id: membership.client_id,
-          membership_plan: pDetails.plan,
+          membership_plan: planName,
           duration_days: parseInt(durationDays),
-          amount: pDetails.amount,
-          start_date: new Date().toISOString().split('T')[0],
-          expiry_date: newExpiry.toISOString().split('T')[0],
+          amount: amount,
+          start_date: startDate,
+          expiry_date: expiryDateStr,
           status: 'Active',
           payment_status: 'Paid',
           renewal_status: 'New',
@@ -995,8 +1051,8 @@ export const AppProvider = ({ children }) => {
       await supabase.from('renewal_logs').insert({
         client_id: membership.client_id,
         membership_id: insertedData[0].id,
-        previous_expiry_date: new Date().toISOString().split('T')[0],
-        new_expiry_date: newExpiry.toISOString().split('T')[0],
+        previous_expiry_date: startDate,
+        new_expiry_date: expiryDateStr,
         renewed_by_user_id: user?.id
       });
 
@@ -1008,7 +1064,7 @@ export const AppProvider = ({ children }) => {
             whatsapp_number: client.whatsapp_number,
             message_type: 'Welcome Plan',
             client_name: client.name,
-            expiry_date: newExpiry.toISOString().split('T')[0]
+            expiry_date: expiryDateStr
           }
         });
       }
@@ -1026,7 +1082,11 @@ export const AppProvider = ({ children }) => {
     const { data: updatedData, error: updateError } = await supabase
       .from('memberships')
       .update({
-        expiry_date: newExpiry.toISOString().split('T')[0],
+        membership_plan: planName,
+        duration_days: parseInt(durationDays),
+        amount: amount,
+        start_date: startDate,
+        expiry_date: expiryDateStr,
         status: 'Active',
         renewal_status: 'Renewed'
       })
@@ -1038,8 +1098,8 @@ export const AppProvider = ({ children }) => {
     await supabase.from('renewal_logs').insert({
       client_id: membership.client_id,
       membership_id: membershipId,
-      previous_expiry_date: membership.expiryDate,
-      new_expiry_date: newExpiry.toISOString().split('T')[0],
+      previous_expiry_date: membership.expiryDate || membership.expiry_date,
+      new_expiry_date: expiryDateStr,
       renewed_by_user_id: user?.id
     });
 
@@ -1051,7 +1111,7 @@ export const AppProvider = ({ children }) => {
           whatsapp_number: client.whatsapp_number,
           message_type: 'Renewal Confirmation',
           client_name: client.name,
-          new_expiry_date: newExpiry.toISOString().split('T')[0]
+          new_expiry_date: expiryDateStr
         }
       });
     }
@@ -1126,7 +1186,7 @@ export const AppProvider = ({ children }) => {
     // 2. Insert into activity logs
     const markerName = user?.name || user?.email?.split('@')[0] || 'System Admin';
     const clientId = updatedData[0]?.client_id;
-    
+
     if (actionType) {
       await supabase.from('membership_activity_logs').insert([
         {
@@ -1151,7 +1211,7 @@ export const AppProvider = ({ children }) => {
       };
       setMemberships(prev => prev.map(m => m.id === membershipId ? mapped : m));
     }
-    
+
     return { data: updatedData, error: null };
   };
 
@@ -1300,7 +1360,7 @@ export const AppProvider = ({ children }) => {
     // Record is now visitor-based
     const visitor = visitors.find(v => v.id === record.visitorId);
     const now = new Date();
-    
+
     const existing = closingsRef.current.find(
       c => c.visitor_id === record.visitorId
     );
@@ -1319,12 +1379,12 @@ export const AppProvider = ({ children }) => {
 
     if (closingErr) throw closingErr;
 
-    const mappedRecord = { 
-      ...closingData[0], 
-      visitorId: closingData[0].visitor_id, 
-      markedBy: closingData[0].created_by_user_name 
+    const mappedRecord = {
+      ...closingData[0],
+      visitorId: closingData[0].visitor_id,
+      markedBy: closingData[0].created_by_user_name
     };
-    
+
     setClosings(prev => {
       const idx = prev.findIndex(c => c.visitor_id === record.visitorId);
       if (idx >= 0) {
@@ -1334,8 +1394,9 @@ export const AppProvider = ({ children }) => {
       }
       return [...prev, mappedRecord];
     });
-    
-    return { data: closingData[0] };  };
+
+    return { data: closingData[0] };
+  };
 
   const deleteClosing = async (id) => {
     const { error } = await supabase.from('closing').delete().eq('id', id);
@@ -1353,10 +1414,10 @@ export const AppProvider = ({ children }) => {
       currentUser, currentRole, session, authLoading, isAuthenticated,
       customers, addCustomer, updateCustomer, deleteCustomer,
       visitors, addVisitor, updateVisitor, deleteVisitor,
-      attendance, updateAttendance, setAttendance, fetchMonthlyAttendance, attendanceLocks, finalizeAttendance,
+      attendance, updateAttendance, logShakePayment, logVisitorShakePayment, setAttendance, fetchMonthlyAttendance, attendanceLocks, finalizeAttendance,
       memberships, addMembership, renewMembership, addNewMember, fetchData, convertVisitorToMember, updateMembership, deleteMembership, fetchMembershipActivityLogs,
       notifications, setNotifications, sendWhatsAppAlert,
-      closings, addClosing, updateClosing,
+      closings, addClosing, updateClosing, deleteClosing,
       dataLoading
     }}>
       {children}

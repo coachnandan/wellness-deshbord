@@ -17,7 +17,8 @@ import {
   ChevronRight,
   CreditCard,
   UserCheck,
-  CheckSquare
+  CheckSquare,
+  DollarSign
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { getISTDateString, getISTTimeString, getISTDisplayDate } from '../utils/dateUtils';
@@ -39,7 +40,7 @@ const PURPOSES = [
 ];
 
 export default function Visitor() {
-  const { visitors = [], addVisitor, updateVisitor, deleteVisitor, dataLoading, convertVisitorToMember, addClosing, closings = [], user } = useAppContext();
+  const { visitors = [], addVisitor, updateVisitor, deleteVisitor, dataLoading, convertVisitorToMember, addClosing, closings = [], logVisitorShakePayment, user } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -56,6 +57,17 @@ export default function Visitor() {
     plan: '10 Days',
     amount: 2500,
     amountType: 'Default'
+  });
+
+  const [isShakeModalOpen, setIsShakeModalOpen] = useState(false);
+  const [selectedVisitorForShake, setSelectedVisitorForShake] = useState(null);
+  const [shakeFormState, setShakeFormState] = useState({
+    shakeType: 'S',
+    totalAmount: 250,
+    paymentStatus: 'Paid',
+    advanceAmount: 0,
+    dueAmount: 0,
+    paymentMethod: 'Cash'
   });
 
   const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm();
@@ -171,7 +183,8 @@ export default function Visitor() {
   const handleMembershipSubmit = async (e) => {
     e.preventDefault();
     try {
-      const duration = membershipFormState.plan === '3 Days' ? 3 
+      const duration = membershipFormState.plan === '1 Day' ? 1 
+        : membershipFormState.plan === '3 Days' ? 3 
         : membershipFormState.plan === '10 Days' ? 10 
         : 30;
 
@@ -201,6 +214,46 @@ export default function Visitor() {
         toast.error(`Failed to add to Closing: ${error.message || 'Unknown error'}`);
       }
       setActiveDropdown(null);
+    }
+  };
+
+  const DAILY_RATES = { 'S': 250, 'SB': 418, 'SF': 348, 'SBF': 481 };
+  const REMARK_LABELS = { 'S': 'Shake', 'SB': 'Shake + Beta Heart', 'SF': 'Shake + Fiber', 'SBF': 'Shake + Beta + Fiber' };
+
+  const handleOpenShakeModal = (visitor) => {
+    setSelectedVisitorForShake(visitor);
+    setShakeFormState({
+      shakeType: 'S',
+      totalAmount: 250,
+      paymentStatus: 'Paid',
+      advanceAmount: 0,
+      dueAmount: 0,
+      paymentMethod: 'Cash'
+    });
+    setIsShakeModalOpen(true);
+    setActiveDropdown(null);
+  };
+
+  const handleShakeSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedVisitorForShake) return;
+
+    try {
+      await logVisitorShakePayment(selectedVisitorForShake.id, {
+        visitor_name: selectedVisitorForShake.visitor_name,
+        shake_type: shakeFormState.shakeType,
+        amount: shakeFormState.totalAmount,
+        payment_status: shakeFormState.paymentStatus,
+        advance_amount: shakeFormState.advanceAmount,
+        due_amount: shakeFormState.dueAmount,
+        payment_method: shakeFormState.paymentMethod,
+      });
+
+      toast.success(`Shake payment recorded for ${selectedVisitorForShake.visitor_name}!`);
+      setIsShakeModalOpen(false);
+    } catch (error) {
+      console.error('Shake payment failed:', error);
+      toast.error(error.message || 'Failed to record shake payment.');
     }
   };
 
@@ -429,6 +482,12 @@ export default function Visitor() {
                             <CreditCard size={14} className="mr-3 text-gold" /> Membership
                           </button>
                           <button
+                            onClick={() => handleOpenShakeModal(visitor)}
+                            className="w-full px-5 py-4 text-left text-[10px] font-black uppercase tracking-widest text-[#D97706] hover:bg-[#FEF3C7]/50 transition-colors flex items-center border-b border-beige/40"
+                          >
+                            <Clock size={14} className="mr-3 text-[#D97706]" /> Shake
+                          </button>
+                          <button
                             onClick={() => handleAddToClosing(visitor)}
                             className={`w-full px-5 py-4 text-left text-[10px] font-black uppercase tracking-widest transition-colors flex items-center border-b border-beige/40 ${
                               closings.some(c => c.visitor_id === visitor.id)
@@ -616,13 +675,14 @@ export default function Visitor() {
                   <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Membership Plan *</label>
                   <select required value={membershipFormState.plan} onChange={(e) => {
                     const plan = e.target.value;
-                    const defaultAmount = plan === '3 Days' ? 729 : plan === '10 Days' ? 2500 : 7000;
+                    const defaultAmount = plan === '1 Day' ? 173 : plan === '3 Days' ? 729 : plan === '10 Days' ? 2500 : 7000;
                     setMembershipFormState(p => ({
                       ...p, 
                       plan, 
                       amount: p.amountType === 'Default' ? defaultAmount : p.amount
                     }));
                   }} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none">
+                    <option value="1 Day">1 Day</option>
                     <option value="3 Days">3 Days</option>
                     <option value="10 Days">10 Days</option>
                     <option value="30 Days">30 Days</option>
@@ -635,7 +695,7 @@ export default function Visitor() {
                       value={membershipFormState.amountType} 
                       onChange={(e) => {
                         const amountType = e.target.value;
-                        const defaultAmount = membershipFormState.plan === '3 Days' ? 729 : membershipFormState.plan === '10 Days' ? 2500 : 7000;
+                        const defaultAmount = membershipFormState.plan === '1 Day' ? 173 : membershipFormState.plan === '3 Days' ? 729 : membershipFormState.plan === '10 Days' ? 2500 : 7000;
                         setMembershipFormState(p => ({
                           ...p, 
                           amountType, 
@@ -644,7 +704,7 @@ export default function Visitor() {
                       }} 
                       className={`h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none ${membershipFormState.amountType === 'Other' ? 'w-1/3' : 'w-full'}`}
                     >
-                      <option value="Default">₹{membershipFormState.plan === '3 Days' ? 729 : membershipFormState.plan === '10 Days' ? 2500 : 7000}</option>
+                      <option value="Default">₹{membershipFormState.plan === '1 Day' ? 173 : membershipFormState.plan === '3 Days' ? 729 : membershipFormState.plan === '10 Days' ? 2500 : 7000}</option>
                       <option value="Other">Other</option>
                     </select>
                     {membershipFormState.amountType === 'Other' && (
@@ -669,6 +729,137 @@ export default function Visitor() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Shake Billing & Payment Modal */}
+      {isShakeModalOpen && selectedVisitorForShake && (
+        <div className="fixed inset-0 bg-charcoal/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-300">
+            <div className="px-8 py-6 border-b border-beige flex items-center justify-between bg-offwhite/30">
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
+                  shakeFormState.shakeType === 'S' ? 'bg-[#D97706]/10 text-[#D97706]' :
+                  shakeFormState.shakeType === 'SB' ? 'bg-[#7C3AED]/10 text-[#7C3AED]' : 'bg-[#0891B2]/10 text-[#0891B2]'
+                }`}><DollarSign size={20} /></div>
+                <div>
+                  <h3 className="text-xl font-extrabold text-forest">Standalone Shake</h3>
+                  <p className="text-xs text-muted font-bold mt-1">{selectedVisitorForShake.visitor_name}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsShakeModalOpen(false)} className="p-2 rounded-xl bg-offwhite text-muted hover:bg-beige transition-colors"><X size={20} /></button>
+            </div>
+            
+            <form onSubmit={handleShakeSubmit} className="p-8 space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Select Shake Type *</label>
+                <select 
+                  required
+                  value={shakeFormState.shakeType}
+                  onChange={(e) => {
+                    const type = e.target.value;
+                    const rate = DAILY_RATES[type];
+                    setShakeFormState(prev => {
+                      const advance = prev.paymentStatus === 'Paid' ? rate : (prev.paymentStatus === 'Advance' ? prev.advanceAmount : 0);
+                      const due = prev.paymentStatus === 'Due' ? rate : (prev.paymentStatus === 'Advance' ? Math.max(0, rate - advance) : 0);
+                      return { ...prev, shakeType: type, totalAmount: rate, advanceAmount: advance, dueAmount: due };
+                    });
+                  }}
+                  className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
+                >
+                  <option value="S">Shake (S) - ₹250</option>
+                  <option value="SB">Shake + Beta Heart (SB) - ₹418</option>
+                  <option value="SF">Shake + Fiber (SF) - ₹348</option>
+                  <option value="SBF">Shake + Beta Heart + Fiber (SBF) - ₹481</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Payment Status *</label>
+                  <select 
+                    required
+                    value={shakeFormState.paymentStatus}
+                    onChange={(e) => {
+                      const status = e.target.value;
+                      setShakeFormState(prev => {
+                        const rate = prev.totalAmount;
+                        if (status === 'Paid') return { ...prev, paymentStatus: status, advanceAmount: rate, dueAmount: 0 };
+                        if (status === 'Due') return { ...prev, paymentStatus: status, advanceAmount: 0, dueAmount: rate };
+                        return { ...prev, paymentStatus: status, advanceAmount: 0, dueAmount: rate };
+                      });
+                    }}
+                    className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
+                  >
+                    <option value="Paid">Paid</option>
+                    <option value="Advance">Advance</option>
+                    <option value="Due">Due</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Payment Method *</label>
+                  <select 
+                    required
+                    value={shakeFormState.paymentMethod}
+                    onChange={(e) => setShakeFormState(p => ({...p, paymentMethod: e.target.value}))}
+                    className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all appearance-none"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Card">Card</option>
+                  </select>
+                </div>
+              </div>
+
+              {shakeFormState.paymentStatus === 'Advance' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Advance (₹) *</label>
+                    <input 
+                      type="number" 
+                      required min="0" max={shakeFormState.totalAmount}
+                      value={shakeFormState.advanceAmount}
+                      onChange={(e) => {
+                        const adv = Number(e.target.value);
+                        setShakeFormState(p => ({ ...p, advanceAmount: adv, dueAmount: Math.max(0, p.totalAmount - adv) }));
+                      }}
+                      className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Due (₹)</label>
+                    <div className="w-full h-14 px-6 bg-beige/30 border border-beige/50 rounded-2xl font-bold text-muted flex items-center cursor-not-allowed">
+                      ₹{shakeFormState.dueAmount}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className={`p-6 rounded-3xl border-2 transition-colors ${
+                shakeFormState.shakeType === 'S' ? 'bg-[#FEF9C3]/20 border-[#D97706]/20' :
+                shakeFormState.shakeType === 'SB' ? 'bg-[#7C3AED]/5 border-[#7C3AED]/20' : 'bg-[#0891B2]/5 border-[#0891B2]/20'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-muted uppercase tracking-widest">Total Amount</p>
+                    <p className="text-[10px] font-bold text-muted mt-1">{REMARK_LABELS[shakeFormState.shakeType]}</p>
+                  </div>
+                  <p className={`text-4xl font-extrabold tracking-tight ${
+                    shakeFormState.shakeType === 'S' ? 'text-[#D97706]' : shakeFormState.shakeType === 'SB' ? 'text-[#7C3AED]' : 'text-[#0891B2]'
+                  }`}>₹{shakeFormState.totalAmount.toLocaleString('en-IN')}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-2">
+                <button type="button" onClick={() => setIsShakeModalOpen(false)} className="flex-1 px-6 py-4 bg-white text-forest border border-beige rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-offwhite active:scale-95 transition-all shadow-sm">Cancel</button>
+                <button type="submit"
+                  className={`flex-[2] px-6 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-luxury active:scale-95 ${
+                    shakeFormState.shakeType === 'S' ? 'bg-gradient-to-br from-[#F59E0B] to-[#D97706] shadow-[#D97706]/30' :
+                    shakeFormState.shakeType === 'SB' ? 'bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] shadow-[#7C3AED]/30' : 
+                    'bg-gradient-to-br from-[#06B6D4] to-[#0891B2] shadow-[#0891B2]/30'
+                  }`}>Confirm & Save</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
