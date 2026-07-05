@@ -57,7 +57,7 @@ export default function Dashboard() {
   const activeMemberships = memberships.filter(m => m.status === 'Active').length;
   
   const todayAttendance = attendance.filter(a => a.date === todayStr && a.status === 'Present').length;
-  const todayShakes = attendance.filter(a => a.date === todayStr && a.status === 'Shake').length;
+  const todayShakes = attendance.filter(a => a.date === todayStr && ['S', 'SB', 'SF', 'SBF'].includes(a.remark)).length;
   const pendingRenewals = memberships.filter(m => m.status === 'Pending').length;
   
   // Net Revenue

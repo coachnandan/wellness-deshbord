@@ -1302,6 +1302,101 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // ── Auto Carry-Forward: visitors ≥ 24h old → Closing (Pending) ─────────────
+  const autoCarryForwardClosings = async () => {
+    if (!supabase) return;
+    const now = new Date();
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+    // All visitors whose created_at is at least 24 hours ago
+    const eligible = visitorsRef.current.filter((v) => {
+      if (!v.created_at) return false;
+      const age = now - new Date(v.created_at);
+      return age >= TWENTY_FOUR_HOURS_MS;
+    });
+
+    if (eligible.length === 0) return;
+
+    console.log(`[AutoClosing] Checking ${eligible.length} eligible visitor(s) for carry-forward.`);
+
+    for (const visitor of eligible) {
+      try {
+        // Closing date = day AFTER the visitor's visit (follow-up date)
+        const vDate = visitor.visit_date || getISTDateString();
+        const closingDate = new Date(vDate);
+        closingDate.setDate(closingDate.getDate() + 1);
+        const closingDateStr = closingDate.toISOString().split('T')[0];
+
+        // Check if already in closing with correct date — skip to avoid noise
+        const existing = closingsRef.current.find(c => c.visitor_id === visitor.id);
+        if (existing && existing.visit_date === closingDateStr) continue;
+
+        const insertPayload = {
+          visitor_id: visitor.id,
+          visitor_name: visitor.visitor_name || '',
+          contact_number: visitor.mobile_number || '',
+          visit_date: closingDateStr,
+          visit_time: visitor.visit_time || '',
+          status: existing?.status || 'Pending',
+          selected_type: existing?.selected_type || 'Pending',
+          created_at: existing?.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          created_by_user_id: existing?.created_by_user_id || null,
+          created_by_user_name: existing?.created_by_user_name || 'Auto',
+        };
+
+        const { data: closingData, error } = await supabase
+          .from('closing')
+          .upsert(insertPayload, { onConflict: 'visitor_id', ignoreDuplicates: false })
+          .select()
+          .single();
+
+        if (error) {
+          if (error.code !== '23505') {
+            console.warn('[AutoClosing] Upsert failed for visitor', visitor.id, error.message);
+          }
+        } else if (closingData) {
+          const mappedRecord = {
+            ...closingData,
+            visitorId: closingData.visitor_id,
+            markedBy: closingData.created_by_user_name,
+          };
+          // Replace existing record in state or append new one
+          setClosings((prev) => {
+            const idx = prev.findIndex(c => c.visitor_id === closingData.visitor_id);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = mappedRecord;
+              return updated;
+            }
+            return [...prev, mappedRecord];
+          });
+        }
+      } catch (err) {
+        console.warn('[AutoClosing] Unexpected error:', err.message);
+      }
+    }
+  };
+
+  // Run auto carry-forward on mount and every 60 seconds
+  useEffect(() => {
+    // Small initial delay so visitors/closings state is populated first
+    const initialTimer = setTimeout(() => {
+      autoCarryForwardClosings();
+    }, 5000);
+
+    const interval = setInterval(() => {
+      autoCarryForwardClosings();
+    }, 60 * 1000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   // ── Add Closing from Visitor (with duplicate prevention) ───────────────────
   const addClosing = async (visitor, currentUser) => {
     if (!supabase) throw new Error('Supabase not configured');
@@ -1398,6 +1493,31 @@ export const AppProvider = ({ children }) => {
     return { data: closingData[0] };
   };
 
+  // Re-fetch all closing records fresh from DB
+  const refreshClosings = async () => {
+    if (!supabase) return;
+    try {
+      const thirtyOneDaysAgo = new Date(getISTDateString());
+      thirtyOneDaysAgo.setDate(thirtyOneDaysAgo.getDate() - 31);
+      const { data, error } = await supabase
+        .from('closing')
+        .select('*')
+        .gte('visit_date', getISTDateString(thirtyOneDaysAgo))
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.warn('[refreshClosings] Error:', error.message);
+      } else if (data) {
+        setClosings(data.map(c => ({
+          ...c,
+          visitorId: c.visitor_id,
+          markedBy: c.created_by_user_name,
+        })));
+      }
+    } catch (err) {
+      console.warn('[refreshClosings] Unexpected error:', err.message);
+    }
+  };
+
   const deleteClosing = async (id) => {
     const { error } = await supabase.from('closing').delete().eq('id', id);
     if (error) throw error;
@@ -1417,7 +1537,7 @@ export const AppProvider = ({ children }) => {
       attendance, updateAttendance, logShakePayment, logVisitorShakePayment, setAttendance, fetchMonthlyAttendance, attendanceLocks, finalizeAttendance,
       memberships, addMembership, renewMembership, addNewMember, fetchData, convertVisitorToMember, updateMembership, deleteMembership, fetchMembershipActivityLogs,
       notifications, setNotifications, sendWhatsAppAlert,
-      closings, addClosing, updateClosing, deleteClosing,
+      closings, addClosing, updateClosing, deleteClosing, refreshClosings,
       dataLoading
     }}>
       {children}

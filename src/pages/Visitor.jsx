@@ -91,10 +91,14 @@ export default function Visitor() {
     currentPage * itemsPerPage
   );
 
-  const todayCount = visitors.filter(v => v.visit_date === todayStr).length;
-  const weekAgo = new Date(todayStr);
+  const selectedDateCount = visitors.filter(v => v.visit_date === selectedDate).length;
+  const selectedDateObj = new Date(selectedDate);
+  const weekAgo = new Date(selectedDateObj);
   weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekCount = visitors.filter(v => new Date(v.visit_date) >= weekAgo).length;
+  const weekCount = visitors.filter(v => {
+    const visitDate = new Date(v.visit_date);
+    return visitDate > weekAgo && visitDate <= selectedDateObj;
+  }).length;
 
   const handleOpenAdd = () => {
     reset({
@@ -336,14 +340,14 @@ export default function Visitor() {
         </div>
         <div className="luxury-card p-8 flex flex-col justify-between border-l-4 border-l-gold h-[140px]">
           <div className="flex justify-between items-start">
-            <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Today</p>
+            <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">{isToday ? 'Today' : getISTDisplayDate(selectedDate)}</p>
             <Clock size={20} className="text-gold/30" />
           </div>
-          <p className="text-4xl font-extrabold text-gold leading-none">{todayCount}</p>
+          <p className="text-4xl font-extrabold text-gold leading-none">{selectedDateCount}</p>
         </div>
         <div className="luxury-card p-8 flex flex-col justify-between border-l-4 border-l-sage h-[140px]">
           <div className="flex justify-between items-start">
-            <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">This Week</p>
+            <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Trailing 7 Days</p>
             <UserPlus size={20} className="text-sage/30" />
           </div>
           <p className="text-4xl font-extrabold text-sage leading-none">{weekCount}</p>

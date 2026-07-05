@@ -21,20 +21,24 @@ CREATE TABLE IF NOT EXISTS public.closing (
 -- Enable RLS
 ALTER TABLE public.closing ENABLE ROW LEVEL SECURITY;
 
--- Policies
+-- Policies (idempotent — drop first so re-running is safe)
+DROP POLICY IF EXISTS "Authenticated users can select closing" ON public.closing;
 CREATE POLICY "Authenticated users can select closing"
   ON public.closing FOR SELECT
   USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can insert closing" ON public.closing;
 CREATE POLICY "Authenticated users can insert closing"
   ON public.closing FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can update closing" ON public.closing;
 CREATE POLICY "Authenticated users can update closing"
   ON public.closing FOR UPDATE
   USING (auth.role() = 'authenticated')
   WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can delete closing" ON public.closing;
 CREATE POLICY "Authenticated users can delete closing"
   ON public.closing FOR DELETE
   USING (auth.role() = 'authenticated');

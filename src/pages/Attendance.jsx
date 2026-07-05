@@ -483,7 +483,7 @@ export default function Attendance() {
           <div 
             ref={shakeDropdownRef}
             onClick={() => setIsShakeDropdownOpen(!isShakeDropdownOpen)}
-            className="luxury-card p-6 flex flex-col justify-between border-l-4 border-l-[#D97706] relative hover:-translate-y-1 transition-transform duration-300 h-[140px] cursor-pointer"
+            className="luxury-card p-6 flex flex-col justify-between border-l-4 border-l-[#D97706] relative hover:-translate-y-1 transition-transform duration-300 h-[140px] cursor-pointer overflow-visible"
           >
             <div className="flex justify-between items-start">
               <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Shake</p>
@@ -491,8 +491,8 @@ export default function Attendance() {
             </div>
             <p className="text-4xl font-extrabold text-[#D97706] leading-none">{stats.shakes}</p>
             
-            {/* Shake Details Dropdown Overlay */}
-            <div onClick={(e) => e.stopPropagation()} className={`absolute top-full left-0 w-full mt-2 bg-white/95 backdrop-blur-xl rounded-2xl shadow-luxury-hover border border-white/50 p-2 transition-all duration-300 z-20 ${isShakeDropdownOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+            {/* Shake Details Dropdown — opens UPWARD to avoid overlapping search bar */}
+            <div onClick={(e) => e.stopPropagation()} className={`absolute bottom-full left-0 w-full mb-2 bg-white/95 backdrop-blur-xl rounded-2xl shadow-luxury-hover border border-white/50 p-2 transition-all duration-300 z-50 ${isShakeDropdownOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
               <div className="space-y-1">
                 <button onClick={(e) => { e.stopPropagation(); setShowShakeMembers('S'); setIsShakeDropdownOpen(false); }} className="flex justify-between items-center w-full px-3 py-2.5 rounded-xl hover:bg-offwhite transition-colors group/btn">
                   <span className="text-[10px] font-black text-forest uppercase tracking-widest flex items-center gap-2">
