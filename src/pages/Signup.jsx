@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../supabase/supabaseClient';
 import { toast } from 'react-toastify';
 import { Lock, Mail, Leaf, User as UserIcon, Smartphone, Shield, UserPlus } from 'lucide-react';
 

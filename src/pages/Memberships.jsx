@@ -3,7 +3,7 @@ import { CreditCard, AlertTriangle, CheckCircle, Clock, ShieldAlert, DollarSign,
 import { useAppContext } from '../context/AppContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../supabase/supabaseClient';
 import ClientEditModal from '../components/ClientEditModal';
 import ChangePlanModal from '../components/ChangePlanModal';
 

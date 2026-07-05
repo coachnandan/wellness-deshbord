@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { supabase, isConfigured } from '../lib/supabaseClient';
+import { supabase, isConfigured } from '../supabase/supabaseClient';
 import { getISTDateString, getISTTimeString } from '../utils/dateUtils';
 import useRealtime from '../hooks/useRealtime';
 
@@ -437,7 +437,7 @@ export const AppProvider = ({ children }) => {
         purpose: visitorData.purpose || null,
         visit_date: visitorData.visit_date,
         visit_time: visitorData.visit_time,
-        notes: visitorData.notes || null,
+        referral: visitorData.referral || null,
         added_by_user_id: user?.id,
         added_by_name: markerName
       }])

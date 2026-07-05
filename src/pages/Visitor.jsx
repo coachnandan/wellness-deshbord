@@ -18,7 +18,8 @@ import {
   CreditCard,
   UserCheck,
   CheckSquare,
-  DollarSign
+  DollarSign,
+  MessageSquare
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { getISTDateString, getISTTimeString, getISTDisplayDate } from '../utils/dateUtils';
@@ -114,7 +115,7 @@ export default function Visitor() {
     setValue('purpose', visitor.purpose || '');
     setValue('visit_date', visitor.visit_date || todayStr);
     setValue('visit_time', visitor.visit_time || getISTTimeString());
-    setValue('notes', visitor.notes || '');
+    setValue('referral', visitor.referral || '');
     setActiveDropdown(null);
     setIsAddModalOpen(true);
   };
@@ -131,11 +132,21 @@ export default function Visitor() {
           purpose: data.purpose || null,
           visit_date: data.visit_date,
           visit_time: data.visit_time,
-          notes: data.notes || null,
+          referral: data.referral || null,
         });
         toast.success('Visitor record updated.');
       } else {
-        await addVisitor(data);
+        await addVisitor({
+          visitor_name: data.visitor_name,
+          mobile_number: data.mobile_number || null,
+          gender: data.gender || null,
+          age: data.age ? Number(data.age) : null,
+          address: data.address || null,
+          purpose: data.purpose || null,
+          visit_date: data.visit_date,
+          visit_time: data.visit_time,
+          referral: data.referral || null,
+        });
         toast.success('Visitor logged successfully.');
       }
       setIsAddModalOpen(false);
@@ -216,9 +227,6 @@ export default function Visitor() {
       setActiveDropdown(null);
     }
   };
-
-  const DAILY_RATES = { 'S': 250, 'SB': 418, 'SF': 348, 'SBF': 481 };
-  const REMARK_LABELS = { 'S': 'Shake', 'SB': 'Shake + Beta Heart', 'SF': 'Shake + Fiber', 'SBF': 'Shake + Beta + Fiber' };
 
   const handleOpenShakeModal = (visitor) => {
     setSelectedVisitorForShake(visitor);
@@ -450,10 +458,10 @@ export default function Visitor() {
                       <span className="inline-flex items-center px-3 py-2 rounded-xl text-[10px] font-black bg-gold/10 text-gold border border-gold/20">
                         <Clock size={10} className="mr-1" /> {visitor.visit_time || '—'}
                       </span>
-                      {visitor.notes && (
+                      {visitor.referral && (
                         <div className="flex items-center mt-2 text-[10px] text-muted">
-                          <FileText size={10} className="mr-1 flex-shrink-0 text-gold" />
-                          <span className="truncate max-w-[120px]" title={visitor.notes}>{visitor.notes}</span>
+                          <MessageSquare size={10} className="mr-1 flex-shrink-0 text-gold" />
+                          <span className="truncate max-w-[120px]" title={visitor.referral}>{visitor.referral}</span>
                         </div>
                       )}
                     </td>
@@ -620,8 +628,8 @@ export default function Visitor() {
                     <input {...register('visit_time')} type="time" className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all" />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Notes / Remarks (Optional)</label>
-                    <textarea {...register('notes')} rows={3} className="w-full px-6 py-4 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/30 resize-none" placeholder="Any specific requirements, follow-up notes, etc." />
+                    <label className="block text-[10px] font-black text-forest uppercase tracking-[0.2em] px-1 mb-2">Referral (Optional)</label>
+                    <input {...register('referral')} className="w-full h-14 px-6 bg-offwhite border border-beige rounded-2xl font-bold text-forest outline-none focus:ring-4 focus:ring-sage/10 transition-all placeholder-muted/30" placeholder="Referred by..." />
                   </div>
                 </div>
               </div>

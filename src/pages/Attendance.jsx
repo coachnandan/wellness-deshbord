@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../supabase/supabaseClient';
 import {
   Search, Check, X, Filter, Clock,
   Calendar as CalendarIcon, Lock,
